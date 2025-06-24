@@ -1,0 +1,2 @@
+# discrete_analytical_mech
+Discrete analytical mechanics calculations
