@@ -1,21 +1,20 @@
 project:
-  type: manuscript
-
-manuscript:
-  article: minimal_packing.qmd
+  type: default
 
 format:
   html:
-    comments:
-      hypothesis: true
-  docx: default
-  jats: default
-
-  # (other formats)
-  # pdf: default
+    theme: default
+    toc: true
+    code-fold: false
+    fig-width: 8
+    fig-height: 6
+    embed-resources: true
 
 execute:
-  freeze: true
+  freeze: false
+  engine: jupyter
+  
+jupyter: python3
 
 
 

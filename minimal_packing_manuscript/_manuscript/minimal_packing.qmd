@@ -4,24 +4,23 @@ format:
   html:
     code-fold: true
     code-summary: "Show the code"
-author:
+authors:
   - name: Lorne Arnold
     orcid: 0000-0002-6993-1642
     email: arnoldl@uw.edu
     affiliation: University of Washington Tacoma
+    roles: writing
     corresponding: true
 bibliography: references.bib
 ---
 
 ## Abstract
 
-Soil is fundamentally a discrete material that is, nevertheless, commonly modeled as a continuum because of the computational expense of large-scale discrete element models (DEMs). Even at lab specimen scales, DEM’s computational cost may be substantial depending on the grain sizes being modeled. Despite these limitations, discrete models have proven useful in furthering our understanding of soil mechanics because they can spontaneously replicate realistic soil behavior as an emergent macro-scale property from a collection of particles following relatively simple interaction rules. This makes DEM an attractive tool for a multi-scale modeling approach where the constitutive behavior of a representative volume element (RVE) is characterized with a discrete model and applied at a larger scale through a continuum model. The ability of the RVE to represent a soil depends strongly on an appropriate grain size distribution match. However, in order to achieve computationally feasible models, even at lab scales, DEM simulations often use larger minimum particle sizes and more uniform distributions than their intended targets. Intuitively, discrete matches of different grain size distributions (GSDs) will require vastly different numbers of particles. But the precise relationship between GSD characteristics and the number of particles needed to match the distribution (and by extension the associated computational cost associated) is not intuitive. In this paper, we present the minimal packing set (MPS) concept. The minimal packing set is the smallest set of discrete particles needed to match a given GSD. We present a method for determining the MPS for any GSD and discuss strategies for finding the smallest MPS within a set of tolerances on the GSD. When mapped onto USCS classifications, A mapping of MPS onto USCS classification reveals a highly non-linear relationship between soil classification and computational cost of DEM modeling across several orders of magnitude.
+Soil is fundamentally a discrete material that is, nevertheless, commonly modeled as a continuum because of the computational expense of large-scale discrete element models (DEMs). Even at lab specimen scales, DEM’s computational cost may be substantial depending on the grain sizes being modeled. Dispite these limitations, discrete models have proven useful in furthering our understanding of soil mechanics because they can spontaneously replicate realistic soil behavior as an emergent macro-scale property from a collection of particles following relatively simple interaction rules. This makes DEM an attractive tool for a multi-scale modeling approach where the constitutive behavior of a representative volume element (RVE) is characterized with a discrete model and applied at a larger scale through a continuum model. The ability of the RVE to represent a soil depends strongly on an appropriate grain size distribution match. However, in order to achieve computationally feasible models, even at lab scales, DEM simulations often use larger minimum particle sizes and more uniform distributions than their intended targets. Intuitively, discrete matches of different grain size distributions (GSDs) will require vastly different numbers of particles. But the precise relationship between GSD characteristics and the number of particles needed to match the distribution (and by extension the associated computational cost associated) is not intuitive. In this paper, we present the minimal packing set (MPS) concept. The minimal packing set is the smallest set of discrete particles needed to match a given GSD. We present a method for determining the MPS for any GSD and discuss strategies for finding the smallest MPS within a set of tolerances on the GSD. When mapped onto USCS classifications, A mapping of MPS onto USCS classification reveals a highly non-linear relationship between soil classification and computational cost of DEM modeling across several orders of magnitude.
 
 ## Introduction
 
-```{python}
-import sys
-sys.path.append('..')
+```{Python}
 import gsd_lib as gl
 import numpy as np
 import scipy.stats as stats
@@ -124,7 +123,7 @@ with domain $D: [0,1]$ and range $R: [\sqrt[3]{4},2]$.
 
 To confirm, create a plot of 1000 uniform distributions with $\frac{r_{low}}{r_{high}}$ between 0 and 1 with 1000 particles each and plot the resultant value of $p$ along with the analytical value.
 
-```{python}
+```{Python}
 #| label: fig-p
 #| fig-cap: "Representative radius for a uniform distribution of particle sizes."
 
@@ -202,45 +201,20 @@ In other words, we will find the smallest $S$ such that $G$ describes $S$ accura
 This represents a more realistic model of laboratory test results.
 But we don't need to identify all the sizes.
 In fact, for any distribution of sizes in a range, we can find a single size that can represent the same mass with the same number of particles.
-Because multiple sizes can exist between sizes in $G$, we need to expand the definition of $\Phi$ to include the combination of ratios of minimum and maximum particle sizes for all except the largest particle size.
-The size of the largest particles will be set assuming the representative radius from the bounding sieves. 
+Because multiple sizes can exist between sizes in $G$, we need to expand the definition of $\Phi$ to include the combination of ratios of minimum and maximum particle sizes (four possible combinations -- min/min, min/max, max/min, max/max).
 
-This operation will produce an $n$-by-$2$ set for $\Xi$ and $Y$ with the first entry corresponding to solutions for particle sizes skewed to their smallest possible values and the other corresponding to their largest possible values.
-The entries in $Y$ not describe the range of possible quantity ratios for each size in each element compared to the largest element.
-For the example with pre-defined sizes, it was necessary to find the least common multiple of the denominators within $Y$ in order to find an integer solution for all entries in $Y$.
-But since we have a range of values, we now only need to satisfy the condition that at least one integer exists between $Y_1$ and $Y_2$.
-Take the smallest spacing between $Y_{1,i}$ and $Y_{2,i}$ and multiply $Y_{2}$ by the the nearest integer above the inverse of this value.
-If an integer exists between all entries already, this will result in 1. 
-If it does not, it will scale $Y_1$ up such that all pairs have an integer between them.
-
-Now we can drop $Y_1$ and use the final scaled $Y_2$ as $Y$, which will become the $Q$ for our minimal packing set sample.
-Then, using the functions for $\Xi$, $\Phi$, and the appropriate scaling functions, we can solve for the sizes, $X$, that will satisfy the match between $G$ and $S$ when $S=\{(X,G)\}$.
+We can then follow the iterative procedure described in the previous section except that now, we multiply the expanded $Y$ and check wether the four fractions at each index *span*
+or are equal to an integer.
+When they do, these integers are $Q$.
+However, now the sizes in $S$ are unknown.
+But we can find the ratio of the sizes as:
 
 $$P = \sqrt[3]{\Phi}$$
+ 
+*I haven't confirmed this, but I have the sense that the information in the last element in the expanded $\Phi$ will tell you something about the size of the largest particle.*
 
-Note that this solution for the minimal packing set is dependent on the selected value for $p_{n,S}$.
-Because the maximum particle size, $x_{n,S}$ controls the packing set, and a smaller value for $x_{n,S}$ will tend to minimize the set, if the full range of possible $x_{n,S}$ is considered, $x_{n,S}$ and $x_{n-1,S}$ will tend to converge.
-The result of that convergence would be equivalent to the solution for a target $G$ with $x_{n-1,S} \approxeq x_{n,S} = x_{n-1,G}$ and the $x_{n-1,G}$ sieve removed.
-However, it may not always be the case that $x_{n,S}$ converges to $x_{n-1,G}$.
 By testing different samples with size ratios $P$ and $x_{nG}$ between its min and max value, we can find the value of $x_{nG}$ that creates a sample that is accurately and efficiently described by $G$.
-A plot of $||S_{mp}||(p)$ would help identify whether any optimal solutions exist other than $x_{n-1,S} \approxeq x_{n,S} = x_{n-1,G}$.
-This probably depends on the target $G$.
 
-## Implications for DEM modeling
-The algorithms described above can
-1. Find a first-order approximation of the minimal packing.
-2. Quantify the error in approximate minimal packings.
-3. Find a rigorous solution minimal packing.
-
-The rigorous minimal packing may be significantly larger than the first-order approximation or some other packing set within some acceptable tolerance.
-Whether a rigorous or approximate solution is needed depends very much on the application.
-But these concepts can be used to efficiently quantify the computational cost of rigor in the $S:G$ match.
-
-*Insert a plot showing a realistic GSD and the sieve-specific error trend with increasing N.
-I could draw a typical GSD with a dual axis with N on the right. 
-There would be several size-N lines with a colorscale indicating their error?
-or I could plot several GSDs and color by N and use the other axis for the error.*
-
-They can also be used to evaluate the computational cost of approximate and rigorous minimal packings for different USCS classifications.
-
-*Insert a plot showing error v. N for granular USCS soils.*
+*I think there might be a problem with just finding whether there's an integer among the four elements in $\Phi$. 
+I think there needs to be an integer between all entries with the same denominator.
+If the criteria is met with the min in the *

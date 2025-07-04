@@ -30,7 +30,7 @@ class GSD:
     _ok_types = (int, float, np.int64, np.float64, np.int32, np.float32)
     _ok_cont = ("weights", "particles")
 
-    def __init__(self, bins=None, contents=None, cont_type=_ok_cont[0], tol=0):
+    def __init__(self, bins=None, contents=None, cont_type=_ok_cont[0], tol=0.0):
         # validate input
         if cont_type not in GSD._ok_cont:
             raise ValueError(f"content_type must be one of {GSD._ok_cont}")
