@@ -6,14 +6,14 @@ from gsd_lib import GSD, MinimalPackingGenerator
 
 if __name__ == "__main__":
     # Example usage similar to the original main function
-    r = [0.111, 0.222, 0.333, 0.444, 0.555]
-    weight = [0.39, 0.20, 0.14, 0.27, 0.0]
+    d = [9.96705158, 26.63032713, 32.60142395, 33.56999312, 51.61020638]
+    mass = [6.93546639, 12.49031735, 9.29866496, 8.61983351, 0.0]
 
     # Create GSD
-    g = GSD(sizes=r, masses=weight)
+    g = GSD(sizes=d, masses=mass)
 
     # Create minimal packing generator
-    s = MinimalPackingGenerator(g, max_size="representative", order=2, tol=0.000001)
+    s = MinimalPackingGenerator(g)
 
     # Print results
     print(f"Errors: {g.description_error(s.mps)}")

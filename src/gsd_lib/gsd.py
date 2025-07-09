@@ -102,8 +102,9 @@ class GSD(IndexedSet):
 
         for i in range(len(self.sizes) - 1):
             sample_indices = np.where(
-                (sample.sizes >= self.sizes[i]) & (sample.sizes < self.sizes[i + 1])
-            )[0]  # TODO: fix greater than or equal to
+                (sample.sizes > np.nextafter(self.sizes[i], 0))
+                & (sample.sizes < self.sizes[i + 1])
+            )[0]
             percent_between = np.sum(sample.total_masses[sample_indices]) / sample_mass
             sample_percent_retained.append(percent_between)
 

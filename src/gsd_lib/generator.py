@@ -1,19 +1,16 @@
 """MinimalPackingGenerator class for generating minimal packing configurations."""
 
-from fractions import Fraction
-
 import numpy as np
 
 from .sample import Sample
-from .utils import rep_size_by_vol
 
 
 class MinimalPackingGenerator:
     """A class to generate minimal packing configurations for granular materials."""
 
-    _ok_max_size = ("representative", "min", "max", "random")
+    _ok_x_n_factor = (0.0, 1.0)
 
-    def __init__(self, gsd, max_size="representative", order=1, tol=0.0, density=1.0):
+    def __init__(self, gsd, x_n_factor=0.5, tol=0.0, density=1.0):
         """
         Initialize MinimalPackingGenerator.
 
@@ -30,139 +27,113 @@ class MinimalPackingGenerator:
         density : float
             Particle density
         """
-        self.target_gsd = gsd
+        self.g = gsd
         self.density = density
-        self.max_particle_size = self._get_max_particle_size(max_size)
-        self.sample_sizes = None
-        self._set_sample_sizes(order)
-        self.order = order
         self.tol = tol
 
-        self._iterations = 0
+        self._iteration = 1
 
-        self.kappa = None
-        self.min_particles = None
-        self.phi_n = None
-        self.nu_n = None
-        self.xi_n = None
-        self.weights = None
-        self.particles = None
-        self.weight_factor = None
-        self.mps = self._get_minimal_packing_set()
+        self.card_s = len(self.g) - 1
+        self.x_n_factor = x_n_factor
+        self.x_plus = self._get_x_s(extreme=1)
+        self.x_minus = self._get_x_s(extreme=0)
+        self.phi = self._get_phi()
+        self.zeta_plus = self._get_zeta(self.x_plus)
+        self.zeta_minus = self._get_zeta(self.x_minus)
+        self.kappa_plus = self.phi / self.zeta_plus
+        self.kappa_minus = self.phi / self.zeta_minus
 
-    def _get_max_particle_size(self, max_size):
+        self.qs = []
+        self.q_min_max_ratios = []
+        self.errors = []
+
+        self.mps: Sample = self._get_minimal_packing_set()
+
+    def _get_x_s(self, extreme: int):
         """
         Get the maximum size based on the specified max_size type.
         """
-        if max_size == "representative":
-            return rep_size_by_vol(self.target_gsd.sizes[-2], self.target_gsd.sizes[-1])
-        elif max_size == "min":
-            return self.target_gsd.sizes[-2]
-        elif max_size == "max":
-            return self.target_gsd.sizes[-1]
-        elif max_size == "random":
-            return np.random.uniform(
-                self.target_gsd.sizes[-2], self.target_gsd.sizes[-1]
+        factors = extreme * np.ones(self.card_s)
+        factors[-1] = self.x_n_factor
+
+        x = self.g.sizes[:-1] + factors * (self.g.sizes[1:] - self.g.sizes[:-1])
+        # if extreme == 0:
+        #     x[:-1] = np.nextafter(x[:-1], x[1:])
+        return x
+
+    def _get_phi(self):
+        """
+        Calculate the phi values for the sample sizes.
+        """
+        if self.g.percent_retained[-1] != 0:
+            raise Warning(
+                "The last percent_retained value is not zero, indicating an incomplete GSD."
             )
-        else:
-            raise ValueError(
-                f"max_size must be one of {MinimalPackingGenerator._ok_max_size}"
-            )
 
-    def _set_sample_sizes(self, order):
-        """
-        Generate sample sizes based on the following orders:
-        0 - the sizes are randomly distributed within their bins
-        1 - the sizes are representative of a uniform distribution within the bins
-        2 - the sizes are representative of a uniform distribution within the bins (and eventually, will search to tolerance)
-        3 - the max and min particle sizes are evaluated to find the best fit
-        """
-        _sizes = np.zeros(len(self.target_gsd.sizes) - 1) + self.max_particle_size
-        _low_sample_sizes = (
-            np.zeros(len(self.target_gsd.sizes) - 1) + self.max_particle_size
-        )
-        _high_sample_sizes = (
-            np.zeros(len(self.target_gsd.sizes) - 1) + self.max_particle_size
-        )
-        for i in range(len(self.target_gsd.sizes) - 2):
-            if order == 0:
-                # Randomly distribute sizes within their bins
-                _sizes[i] = np.random.uniform(
-                    self.target_gsd.sizes[i], self.target_gsd.sizes[i + 1]
-                )
-            elif order == 1 or order == 2:
-                # Use representative sizes within their bins
-                _sizes[i] = rep_size_by_vol(
-                    self.target_gsd.sizes[i], self.target_gsd.sizes[i + 1]
-                )
-            elif order == 3:
-                # Evaluate max and min particle sizes
-                _low_sample_sizes[i] = self.target_gsd.sizes[i]
-                _high_sample_sizes[i] = self.target_gsd.sizes[i + 1]
+        m = self.g.percent_retained[:-1]
+        m_ns = m[-1]
+        phi = m / m_ns  # TEST: phi[-1] should always be 1.0
+        return phi
 
-        self.sample_sizes = _sizes
-        self._low_sample_sizes = _low_sample_sizes
-        self._high_sample_sizes = _high_sample_sizes
-
-    def _xi_volume_ratios(self, trial_sizes):
+    def _get_zeta(self, x):
         """
-        Calculate the volume ratios of the each size relative to the largest size sample for individual particles.
-        Returns:
-        --------
-        np.ndarray
-            Array of volume ratios for each particle size.
-        """
-        # particle_volumes = self.target_gsd._as_int(sphere_vol(_int_bins))
-        xi = np.asarray(
-            [
-                Fraction(numerator=n, denominator=particle_volumes[-1])
-                for n in particle_volumes
-            ]
-        )
-        return xi
+        Calculate the zeta values for the sample sizes.
 
-    def _get_test_sample(self, trial_sizes):
         """
-        Generate a test sample with given trial sizes.
+        v = x**3
+        v_ns = v[-1]
+        zeta = v / v_ns  # TEST: zeta[-1] should always be 1.0
+        return zeta
+
+    # def _get_test_sample(self, x, kappa, i):
+    #     """
+    #     Generate a test sample with given trial sizes.
+    #     """
+    #     test_qs = max(1, int(kappa * i))
+    #     test_sample = Sample(x, test_qs)
+
+    #     return test_sample
+
+    def _int_between(self, i):
         """
-        test_sample = Sample(trial_sizes, np.ones(len(trial_sizes), dtype=int))
-        self.xi = self._xi_volume_ratios(trial_sizes=trial_sizes)
-        phi = self.target_gsd.phi
-        kappa = phi / self.xi
-        lcm = np.lcm.reduce([fr.denominator for fr in kappa])
-        tries = (lcm - 1) * (self.order == 2) + 1
+        Generate an array of integers that's the smallest integer between two arrays of floats.
+        If no such integer exists, return the next highest integer above the smaller value.
+        Return the integer array and a boolean indicating if an integer between each pair exists.
+        """
+        # Note: the _plus and _minus denote whether the sample size is skewed to the largest or smallest possible size.
+        # Smaller particles will mean larger number of particles, so kappa_minus will be larger than kappa_plus.
+        q_minus = np.floor(self.kappa_minus * i).astype(int)
+        q_plus = np.ceil(self.kappa_plus * i).astype(int)
 
-        for i in range(1, tries + 1):
-            test_min = np.asarray(
-                [
-                    max(
-                        1,
-                        int(
-                            np.multiply(fr.numerator, i / fr.denominator, dtype=object)
-                        ),
-                    )
-                    for fr in kappa
-                ]
-            )
-            test_sample = Sample(trial_sizes, test_min)
-            test_errors = self.target_gsd.description_error(test_sample)
-            if all([abs(x) < self.tol for x in test_errors]):
-                break
+        int_exists = np.all(q_minus >= q_plus)
+        int_array = q_plus
 
-        return test_sample
+        return int_array, int_exists
+
+    def _get_best_size(self, q_int, i):
+        """
+        Generate the best sizes for a test sample based on the integer quantities.
+        """
+        new_zeta = self.phi / (q_int / i)
+        best_sizes = new_zeta ** (1 / 3) * self.x_plus[-1]
+        # if any of the sizes are less than x_minus or greater than x_plus, replace them with the bounds
+        best_sizes = np.clip(best_sizes, self.x_minus, self.x_plus)
+        return best_sizes
 
     def _get_minimal_packing_set(self):
         """
         Generate a minimal packing set based on the target GSD and sample sizes.
         """
-        if self.order != 3:
-            trial_sizes = self.sample_sizes
-        else:
-            _low_size_q = self._get_test_sample(self._low_sample_sizes).quantities
-            _high_size_q = self._get_test_sample(self._high_sample_sizes).quantities
+        s_i = Sample([1], [1])
 
-            xi = self.target_gsd.phi[:-1] / _high_size_q
-            size_ratios = xi ** (1 / 3)
-            trial_sizes = size_ratios * self.max_particle_size
-        mps = self._get_test_sample(trial_sizes)
-        return mps
+        for i in range(1, 1000):
+            q_int, stop = self._int_between(i)
+            sizes = self._get_best_size(q_int, i)
+            s_i = Sample(sizes, q_int)
+            self.qs.append(q_int)
+            self.errors.append(self.g.description_error(s_i))
+            if stop:
+                self._iteration = i
+                break
+
+        return s_i
