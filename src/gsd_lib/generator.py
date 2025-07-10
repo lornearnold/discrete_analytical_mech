@@ -10,7 +10,7 @@ class MinimalPackingGenerator:
 
     _ok_x_n_factor = (0.0, 1.0)
 
-    def __init__(self, gsd, x_n_factor=0.5, tol=0.0, density=1.0):
+    def __init__(self, gsd, x_n_factor=0.5, tol=1e-3, flex=False, density=1.0):
         """
         Initialize MinimalPackingGenerator.
 
@@ -47,7 +47,10 @@ class MinimalPackingGenerator:
         self.q_min_max_ratios = []
         self.errors = []
 
-        self.mps: Sample = self._get_minimal_packing_set()
+        if flex:
+            self.mps: Sample = self._get_minimal_packing_set()
+        else:
+            self.mps: Sample = self._get_constrained_packing_set()
 
     def _get_x_s(self, extreme: int):
         """
@@ -134,6 +137,25 @@ class MinimalPackingGenerator:
             self.errors.append(self.g.description_error(s_i))
             if stop:
                 self._iteration = i
+                break
+
+        return s_i
+
+    def _get_constrained_packing_set(self):
+        """
+        Generate a minimal packing set based on the target GSD and sample sizes.
+        """
+        s_i = Sample([1], [1])
+
+        for i in range(1, 10000):
+            q_int = np.ceil(self.kappa_plus * i).astype(int)
+            # sizes = self._get_best_size(q_int, i)
+            s_i = Sample(self.x_plus, q_int)
+            self.qs.append(q_int)
+            err = self.g.description_error(s_i)
+            self.errors.append(err)
+            self._iteration = i
+            if np.all(err <= self.tol):
                 break
 
         return s_i
