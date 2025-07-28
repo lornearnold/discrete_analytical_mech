@@ -49,6 +49,7 @@ if __name__ == "__main__":
 
     # Create GSD
     g = GSD(sizes=d, masses=mass)
+    cu = g.cu
     print(g.uscs_classification())
 
     # Create minimal packing generator

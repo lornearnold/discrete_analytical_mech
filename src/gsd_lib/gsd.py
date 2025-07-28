@@ -3,85 +3,129 @@
 import warnings
 
 import numpy as np
+from scipy.interpolate import CubicSpline
 
 from .base import IndexedSet
 
 
-def classify_uscs(sizes, percent_passing):
+def add_boundary_knots(spline):
     """
-    Classify a grain size distribution according to USCS standards.
+    # Copied from https://docs.scipy.org/doc/scipy/tutorial/interpolate/extrapolation_examples.html#cubicspline-extend-the-boundary-conditions
+    Add knots infinitesimally to the left and right.
 
-    Parameters:
-    -----------
-    sizes : array-like
-        Array of sieve sizes in mm
-    percent_passing : array-like
-        Array of percent passing values corresponding to sizes
-
-    Returns:
-    --------
-    str
-        USCS classification symbol
+    Additional intervals are added to have zero 2nd and 3rd derivatives,
+    and to maintain the first derivative from whatever boundary condition
+    was selected. The spline is modified in place.
     """
-    sizes = np.asarray(sizes)
-    percent_passing = np.asarray(percent_passing)
+    # determine the slope at the left edge
+    leftx = spline.x[0]
+    lefty = spline(leftx)
+    leftslope = spline(leftx, nu=1)
 
-    # Key sieve sizes (mm)
-    sieve_200 = 0.075
-    sieve_4 = 4.75
+    # add a new breakpoint just to the left and use the
+    # known slope to construct the PPoly coefficients.
+    leftxnext = np.nextafter(leftx, leftx - 1)
+    leftynext = lefty + leftslope * (leftxnext - leftx)
+    leftcoeffs = np.array([0, 0, leftslope, leftynext])
+    spline.extend(leftcoeffs[..., None], np.r_[leftxnext])
 
-    # Interpolate percent passing at key sizes
-    percent_fines = np.interp(sieve_200, sizes, percent_passing)
-    percent_gravel = 1 - np.interp(sieve_4, sizes, percent_passing)
+    # repeat with additional knots to the right
+    rightx = spline.x[-1]
+    righty = spline(rightx)
+    rightslope = spline(rightx, nu=1)
+    rightxnext = np.nextafter(rightx, rightx + 1)
+    rightynext = righty + rightslope * (rightxnext - rightx)
+    rightcoeffs = np.array([0, 0, rightslope, rightynext])
+    spline.extend(rightcoeffs[..., None], np.r_[rightxnext])
 
-    # Coarse-grained soils (< 50% passing #200)
-    if percent_fines < 0.5:
-        if percent_gravel > 0.5:
-            # Gravel
-            if percent_fines < 0.05:
-                # Clean gravel - check gradation
-                cu, cc = _gradation_parameters(sizes, percent_passing)
-                if cu >= 4 and 1 <= cc <= 3:
-                    return "GW"  # Well-graded gravel
-                else:
-                    return "GP"  # Poorly graded gravel
-            elif 0.05 <= percent_fines <= 0.12:
-                # Borderline - dual symbol
-                cu, cc = _gradation_parameters(sizes, percent_passing)
-                if cu >= 4 and 1 <= cc <= 3:
-                    return "GW-GM" if _is_silty(sizes, percent_passing) else "GW-GC"
-                else:
-                    return "GP-GM" if _is_silty(sizes, percent_passing) else "GP-GC"
-            else:
-                # Gravel with fines
-                return "GM" if _is_silty(sizes, percent_passing) else "GC"
-        else:
-            # Sand
-            if percent_fines < 0.05:
-                # Clean sand - check gradation
-                cu, cc = _gradation_parameters(sizes, percent_passing)
-                if cu >= 6 and 1 <= cc <= 3:
-                    return "SW"  # Well-graded sand
-                else:
-                    return "SP"  # Poorly graded sand
-            elif 0.05 <= percent_fines <= 0.12:
-                # Borderline - dual symbol
-                cu, cc = _gradation_parameters(sizes, percent_passing)
-                if cu >= 6 and 1 <= cc <= 3:
-                    return "SW-SM" if _is_silty(sizes, percent_passing) else "SW-SC"
-                else:
-                    return "SP-SM" if _is_silty(sizes, percent_passing) else "SP-SC"
-            else:
-                # Sand with fines
-                return "SM" if _is_silty(sizes, percent_passing) else "SC"
 
-    # Fine-grained soils (≥ 50% passing #200)
-    else:
-        # For fine-grained soils, Atterberg limits are needed for proper classification
-        # Return generic classifications
-        return (
-            "ML/CL"  # Silt/clay - requires Atterberg limits for precise classification
-        )
+# def find_cubic_coefficients(x1, y1, x2, y2):
+#     # Set up the system of equations:
+#     # a*x1^3 + b*x1^2 = y1
+#     # a*x2^3 + b*x2^2 = y2
+#     A = np.array([[x1**3, x1**2], [x2**3, x2**2]])
+#     Y = np.array([y1, y2])
+
+#     # Solve for a and b
+#     a, b = np.linalg.solve(A, Y)
+#     return a, b
+
+
+# def classify_uscs(sizes, percent_passing):
+#     """
+#     Classify a grain size distribution according to USCS standards.
+
+#     Parameters:
+#     -----------
+#     sizes : array-like
+#         Array of sieve sizes in mm
+#     percent_passing : array-like
+#         Array of percent passing values corresponding to sizes
+
+#     Returns:
+#     --------
+#     str
+#         USCS classification symbol
+#     """
+#     sizes = np.asarray(sizes)
+#     percent_passing = np.asarray(percent_passing)
+
+#     # Key sieve sizes (mm)
+#     sieve_200 = 0.075
+#     sieve_4 = 4.75
+
+#     # Interpolate percent passing at key sizes
+#     percent_fines = np.interp(sieve_200, sizes, percent_passing)
+#     percent_gravel = 1 - np.interp(sieve_4, sizes, percent_passing)
+
+#     # Coarse-grained soils (< 50% passing #200)
+#     if percent_fines < 0.5:
+#         if percent_gravel > 0.5:
+#             # Gravel
+#             if percent_fines < 0.05:
+#                 # Clean gravel - check gradation
+#                 cu, cc = _gradation_parameters(sizes, percent_passing)
+#                 if cu >= 4 and 1 <= cc <= 3:
+#                     return "GW"  # Well-graded gravel
+#                 else:
+#                     return "GP"  # Poorly graded gravel
+#             elif 0.05 <= percent_fines <= 0.12:
+#                 # Borderline - dual symbol
+#                 cu, cc = _gradation_parameters(sizes, percent_passing)
+#                 if cu >= 4 and 1 <= cc <= 3:
+#                     return "GW-GM" if _is_silty(sizes, percent_passing) else "GW-GC"
+#                 else:
+#                     return "GP-GM" if _is_silty(sizes, percent_passing) else "GP-GC"
+#             else:
+#                 # Gravel with fines
+#                 return "GM" if _is_silty(sizes, percent_passing) else "GC"
+#         else:
+#             # Sand
+#             if percent_fines < 0.05:
+#                 # Clean sand - check gradation
+#                 cu, cc = _gradation_parameters(sizes, percent_passing)
+#                 if cu >= 6 and 1 <= cc <= 3:
+#                     return "SW"  # Well-graded sand
+#                 else:
+#                     return "SP"  # Poorly graded sand
+#             elif 0.05 <= percent_fines <= 0.12:
+#                 # Borderline - dual symbol
+#                 cu, cc = _gradation_parameters(sizes, percent_passing)
+#                 if cu >= 6 and 1 <= cc <= 3:
+#                     return "SW-SM" if _is_silty(sizes, percent_passing) else "SW-SC"
+#                 else:
+#                     return "SP-SM" if _is_silty(sizes, percent_passing) else "SP-SC"
+#             else:
+#                 # Sand with fines
+#                 return "SM" if _is_silty(sizes, percent_passing) else "SC"
+
+#     # Fine-grained soils (≥ 50% passing #200)
+#     else:
+#         # For fine-grained soils, Atterberg limits are needed for proper classification
+#         # Return generic classifications
+#         return (
+#             "ML/CL"  # Silt/clay - requires Atterberg limits for precise classification
+#         )
 
 
 def _gradation_parameters(sizes, percent_passing):
@@ -256,6 +300,257 @@ class GSD(IndexedSet):
 
         return np.array(sample_percent_retained) - self.percent_retained
 
+    def _d_percent(self, percent, suppress_warnings=False):
+        """
+        Find the size corresponding to a given percent passing.
+        Interpolate on a semilog-x scale.
+        """
+        log_size = np.log10(self.sizes)
+        gsd_curve = self.percent_passing
+
+        if percent < self.percent_passing[0] and not suppress_warnings:
+            warnings.warn(
+                f"The minimum size has more than {percent * 100:.1f}% passing. "
+                f"Extrapolating below the minimum size.",
+                UserWarning,
+            )
+
+            spline = CubicSpline(log_size, self.percent_passing, bc_type="natural")
+            # extend the natural natural spline with linear extrapolating knots
+            add_boundary_knots(spline)
+            log_size = np.linspace(0.0001, log_size[-1], 1000)
+            gsd_curve = spline(log_size, nu=0)
+
+        log_d = np.interp(percent, log_size, gsd_curve)
+        return 10**log_d
+
+    def _i_gs_curve(self):
+        """
+        Extend the GSD curve over tha required range for defining the grain-size index, I_GS as described by (Erguler, 2016).
+        The range is from 0.001 to 75 mm."""
+        left_bound = 0.0001
+        right_bound = 75.0
+
+        size_points = self.sizes
+        gsd_curve = self.percent_passing
+        n_extend = 10
+
+        # These commented out lines complete I_GS, but I'm turning them off for now.
+        # This makes a modified I_GS that is more appropriate for the MPS work I'm doing right now.
+        # if size_points[-1] < right_bound:
+        #     size_points = np.concatenate(
+        #         [size_points, np.linspace(size_points[-1], right_bound, n_extend)]
+        #     )
+        #     gsd_curve = np.concatenate([gsd_curve, np.ones(n_extend) * gsd_curve[-1]])
+
+        log_size = np.log10(size_points)
+
+        if size_points[0] > left_bound:
+            spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+            add_boundary_knots(spline)
+            log_size = np.linspace(np.log10(left_bound), log_size[-1], 100)
+            gsd_curve = spline(log_size, nu=0)
+
+        return log_size, gsd_curve
+
+    @property
+    def max_curvature(self):
+        """
+        Calculate the maximum curvature of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Maximum curvature of the GSD curve
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        return np.max(np.abs(second_derivative))
+
+    @property
+    def max_positive_curvature(self):
+        """
+        Calculate the maximum positive curvature of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Maximum positive curvature of the GSD curve
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        return (
+            np.max(second_derivative[second_derivative > 0])
+            if np.any(second_derivative > 0)
+            else 0.0
+        )
+
+    @property
+    def max_negative_curvature(self):
+        """
+        Calculate the maximum negative curvature of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Maximum negative curvature of the GSD curve
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        return (
+            np.min(second_derivative[second_derivative < 0])
+            if np.any(second_derivative < 0)
+            else 0.0
+        )
+
+    @property
+    def concavity_on_linear(self):
+        """
+        Calculate the concavity of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Concavity of the GSD curve, defined as the maximum curvature divided by the range of sizes
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(10**log_size, nu=2)
+        return second_derivative
+
+    @property
+    def concavity_on_log(self):
+        """
+        Calculate the concavity of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Concavity of the GSD curve, defined as the maximum curvature divided by the range of sizes
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        return second_derivative
+
+    @property
+    def average_curvature(self):
+        """
+        Calculate the average curvature of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Average curvature of the GSD curve, defined as the integral of the absolute value of the second derivative
+            divided by the range of sizes
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        integral_curvature = np.trapz(np.abs(second_derivative), log_size)
+        size_range = log_size[-1] - log_size[0]
+        return integral_curvature / size_range if size_range > 0 else np.inf
+
+    @property
+    def max_slope(self):
+        """
+        Calculate the maximum slope of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Maximum slope of the GSD curve
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        first_derivative = spline(log_size, nu=1)
+        return np.max(np.abs(first_derivative))
+
+    @property
+    def i_gs(self):
+        """
+        Calculate the grain-size index (I_GS) as described by Erguler (2016).
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        a_t = log_size[-1] - log_size[0]
+        a_c = np.trapezoid(gsd_curve, log_size)
+        return a_c / a_t
+
+    @property
+    def d_10(self):
+        """
+        Calculate D10 (size at 10% passing).
+
+        Returns:
+        --------
+        float
+            Size corresponding to 10% passing
+        """
+        return self._d_percent(0.10)
+
+    @property
+    def d_30(self):
+        """
+        Calculate D30 (size at 30% passing).
+
+        Returns:
+        --------
+        float
+            Size corresponding to 30% passing
+        """
+        return self._d_percent(0.30)
+
+    @property
+    def d_60(self):
+        """
+        Calculate D60 (size at 60% passing).
+
+        Returns:
+        --------
+        float
+            Size corresponding to 60% passing
+        """
+        return self._d_percent(0.60)
+
+    @property
+    def cu(self):
+        """
+        Calculate uniformity coefficient (Cu).
+
+        Returns:
+        --------
+        float
+            Uniformity coefficient, defined as D60 / D10
+        """
+        return self.d_60 / self.d_10 if self.d_10 > 0 else np.inf
+
+    @property
+    def cc(self):
+        """
+        Calculate coefficient of curvature (Cc).
+
+        Returns:
+        --------
+        float
+            Coefficient of curvature, defined as (D30^2) / (D60 * D10)
+        """
+
+        return (
+            (self.d_30**2) / (self.d_60 * self.d_10)
+            if self.d_60 > 0 and self.d_10 > 0
+            else 0
+        )
+
     @property
     def percent_passing(self):
         """
@@ -266,10 +561,8 @@ class GSD(IndexedSet):
         np.ndarray
             Array of percent passing values corresponding to sizes
         """
-        pp_offset = np.cumsum(self.percent_retained)
-        pp = np.zeros(len(self.sizes))
-        pp[1:] = pp_offset[:-1]
-        return pp
+        reverse_cumulative_retained = np.cumsum(self.percent_retained[::-1])[::-1]
+        return 1.0 - reverse_cumulative_retained
 
     def uscs_classification(self):
         """

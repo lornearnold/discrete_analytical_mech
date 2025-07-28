@@ -45,7 +45,7 @@ class MinimalPackingGenerator:
 
         self.qs = []
         self.q_min_max_ratios = []
-        self.errors = []
+        self.error = []
 
         if flex:
             self.mps: Sample = self._get_minimal_packing_set()
@@ -134,7 +134,10 @@ class MinimalPackingGenerator:
             sizes = self._get_best_size(q_int, i)
             s_i = Sample(sizes, q_int)
             self.qs.append(q_int)
-            self.errors.append(self.g.description_error(s_i))
+            errors = self.g.description_error(s_i)
+            self.error.append(max(abs(errors)))
+            if np.all(errors <= self.tol):
+                stop = True
             if stop:
                 self._iteration = i
                 break
@@ -152,10 +155,10 @@ class MinimalPackingGenerator:
             # sizes = self._get_best_size(q_int, i)
             s_i = Sample(self.x_plus, q_int)
             self.qs.append(q_int)
-            err = self.g.description_error(s_i)
-            self.errors.append(err)
+            errors = self.g.description_error(s_i)
+            self.error.append(max(abs(errors)))
             self._iteration = i
-            if np.all(err <= self.tol):
+            if np.all(np.abs(errors) <= self.tol):
                 break
 
         return s_i

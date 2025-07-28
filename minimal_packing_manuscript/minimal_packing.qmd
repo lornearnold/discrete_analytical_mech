@@ -22,6 +22,7 @@ Soil is fundamentally a discrete material that is, nevertheless, commonly modele
 ```{python}
 import sys
 sys.path.append('..')
+import math
 import gsd_lib as gl
 import numpy as np
 import scipy.stats as stats
@@ -35,10 +36,17 @@ Soil is discrete. Several frameworks use discrete approaches, but they're diffic
 But mechanics is mechanics and you can't model something well that doesn't replicate its underlying physical behavior. If you can replicate the underlying mechanisms, the macro-scale behavior should emerge.
 
 The RVE concept is somewhat tied to grain size distribution (but not completely).
+In many cases, a matching GSD (and therefore some of the physical mechanics) is sacrificed for computational efficiency.
+Often, the GSD is upscaled (increased relative to maximum particle size or specimen size) to reduce the number of particles (Zeraati-Shamsabadi & Sadrekarimi, 2025). 
+The ratio of the minimum and maximum particle sizes is significant and often reported in describing a DEM model (Adesina et al., 2024).
 
 What is a grain-size distribution? How can it be described mathematically? How precise does a GSD need to be and how would one even measure that?
 
-Which features of a GSD contribute to more or less computationally intense models?
+How "hard" is it to get a good match for a given GSD?
+What is the relationship between the error in a discrete soil sample and a target GSD and the number of particles in the soil sample?
+How do the specific particle sizes impact this relationship?
+How does the ratio of mass between the largest and smallest particle sizes impact the relationship?
+How do common GSD characteristics from soil mechanics (e.g., $C_u$, $C_u$, USCS classification) impact this relationship?
 
 ## Mathematical GSD
 
@@ -94,77 +102,73 @@ Let's start with the simple case where G describes S efficiently and articulatel
 Select a single particle size to represent all possible particle sizes between two sieve sizes (i.e., $\text{desc}(G,S)$ is articulate).
 
 #### Representative radius
-Imagine a bin with a lower limit of radius, $r_{low}$ and an upper limit of radius $r_{high}$. 
-The distribution of the number of particle radii within the bin is given by a probability density function, $P(r)$.
-Selecting a "representative" value for the bin, $r_{rep}$ would likely involve some measure of the average particle size, either by radius or volume. 
+Imagine a bin with a lower limit of diameter, $x_{l}$ and an upper limit of diameter $x_{h}$ ($\Delta x = x_{h} - x_{l}$). 
+The distribution of the number of particle diameters within the bin is given by a probability density function, $P(x)$.
+Selecting a "representative" value for the bin, $x_{rep}$ would likely involve some measure of the average particle size, either by diameter or volume. 
 A representation based on volume is more appealing since the overall GSD is volume-weighted.
 
-In absence of any other reason to suspect a specific distribution, a uniform distribution seems like a reasonable choice. 
-Under a uniform distribution of radii, the mean radius would be the average of $r_{low}$ and $r_{high}$. 
-The radius at the mean volume of this same distribution would given by:
+The average volume from a uniform diameter distribution will have the form:
 
-$r_{rep} = r_{low} + \frac{r_{high}-r_{low}}{p}$
+$E[V] = \frac{\pi}{6 \Delta x} \int_{x_{l}}^{x_{h}} x^3dx$
 
-where $p$ is between $\sqrt[3]{4}$ and 2 and $\frac{r_{low}}{r_{high}}$ is between 0 and 1.
+Which, after evaluation and factoring, this leads to an equation for average volume:
 
-These come from the range of possible differences between the radius associated with the mean volume and the mean radius.
-If $\frac{r_{low}}{r_{high}}$ is zero, there is no lower limit to the range (i.e., $r_{low}$ is infinitely small), $r_{mean} = r_{high}/2$, and the mean volume will be $\frac{\pi r_{high}^3}{3}$. The radius associated with the mean volume in this case is $\frac{r_{high}}{\sqrt[3]{4}}$. This corresponds to $p = \sqrt[3]{4}$.
+$E[V] = \frac{\pi}{24 } (x_h^2+x_l^2)(x_h+x_l)$
 
+And the diameter matching this average volume will be:
 
-As $\frac{r_{low}}{r_{high}}$ *approaches* one, the difference between $r_{low}$ and $r_{high}$ becomes very small and the radius associated with the mean volume approaches the mean radius. This corresponds to $p = 2$.
-  
-  
-If $\frac{r_{low}}{r_{high}}$ is one, there is no difference between $r_{low}$ and $r_{high}$ (i.e., there is no variation in radii), and the mean volume will be $\frac{4\pi r_{high}^3}{3}$. The radius associated with the mean volume in this case is simply $r_{high}$. This corresponds to an indeterminate condition for $p$.
+$x_{rep} = \sqrt[3]{\frac{6E[V]}{\pi}}$
 
-Therefore, we can use the following equation to select an appropriate value of $p$ to describe a volume-based representative radius for a uniform distribution of particles between $r_{low}$ and $r_{high}$:
+These equations provide a means of selecting a single particle size that will represent a uniform distribution of particle sizes between any two limits, including a lower limit of zero.
+The equation can be verified by generating uniform distributions of particles between $x_l / x_h = 0$ and $1$, finding the average volume of all the particles and normalizing this to the maximum volume.
+Fig. @fig-rep_rad shows this result for 500 such distributions, with the solution predicted by the average volume integral.
 
-$$p(\frac{r_{low}}{r_{high}}) = (2-\sqrt[3]{4})\frac{r_{low}}{r_{high}} + \sqrt[3]{4}$$ 
-
-with domain $D: [0,1]$ and range $R: [\sqrt[3]{4},2]$.
-
-To confirm, create a plot of 1000 uniform distributions with $\frac{r_{low}}{r_{high}}$ between 0 and 1 with 1000 particles each and plot the resultant value of $p$ along with the analytical value.
+To confirm, create a plot of 500 uniform distributions with $\frac{r_{low}}{r_{high}}$ between 0 and 1 with 1000 particles each and plot the resultant value of $p$ along with the analytical value.
 
 ```{python}
-#| label: fig-p
-#| fig-cap: "Representative radius for a uniform distribution of particle sizes."
+#| label: fig-rep_rad
+#| fig-cap: "Normalized average volume for a uniform distribution of particle sizes."
 
 # Create a function that calculates p assuming that r_rep is the radius of a sphere with the same volume as the mean volume of the spheres in the distribution
-def p_r_rep(r_low, r_high, size=1000, verbose=False):
+def v_rep(x_l, x_h, size=10):
     """
     Calculate the parameter 'p' from the radius of the mean volume of spheres with random uniformly distributed radii.
     """
-    r = stats.uniform.rvs(loc=r_low, scale=r_high-r_low,size = size)
-    v = 4/3*np.pi*r**3
-    r_mean = np.mean(r)
-    v_mean = np.mean(v)
-    r_v_mean = (3*v_mean/(4*np.pi))**(1/3)
-    if verbose:
-        print(
-        f"""For a uniform random distribution of radii from {r_low} to {r_high} with {size} samples, \nthe mean radius is {r_mean:.2f}, \nthe mean volume is {v_mean:.2f}, \nand the radius calculated from the mean volume is {r_v_mean:.2f}""")
-    return (r_high-r_low)/(r_v_mean-r_low)
+    x = stats.uniform.rvs(loc=x_l, scale=x_h-x_l,size = size)
+    v = (4/3)*np.pi*(x**3)
+    return np.mean(v)
+
+def v_avg(x_l, x_h):
+    return math.pi * (x_h**2 + x_l**2) * (x_h + x_l) / 3
+
 
 def p_analytical(r_low, r_high):
-    return (2-4**(1/3))*(r_low/r_high) + 4**(1/3)
+    return (0.5 - (0.25**(1/3))) * (r_low/r_high) + (0.25**(1/3))
+    # return (2-2**(1/3))*(r_low/r_high) + 2**(1/3)
 
-r_high = 10
-size = 1000
-r_ratio = np.linspace(0,0.999,size)
-p = []
-for r in r_ratio:
-    p.append(p_r_rep(r_high*r, r_high))
-plt.scatter(r_ratio, p, marker="o", alpha=0.5)
-plt.plot([r_ratio[0],r_ratio[-1]], [p_analytical(r_high*r_ratio[0], r_high),p_analytical(r_high*r_ratio[-1], r_high)], linestyle="--", color="k")
-plt.xlabel("$r_{low}/r_{high}$")
-plt.ylabel("$p$")
-text_plot = plt.text(0.0, 2.0, 
-f"""Values for $p$ in $r_{{rep}} = r_{{low}} + \\frac{{r_{{high}}-r_{{low}}}}{{p}}$
-based on uniform random distributions with {size} 
-samples of radii from $r_{{low}}$ to $r_{{high}}$""")
+x_h = 10
+size = 500
+x_ratio = np.linspace(0,0.999,size)
+x_l = x_ratio * x_h
+v_max = (4/3)*np.pi*(x_h**3)
+v_rep_norm = []
+for x in x_l:
+    v_rep_norm.append(v_rep(x, x_h, size) / v_max)
+analytical = v_avg(x_l, x_h) / v_max
 
-text_plot = plt.text(0.6, 1.65, 
-"""Analytical solution (dashed)
-$p = (2-\\sqrt[3]{{4}}) \\frac{{r_{{low}}}}{{r_{{high}}}} + \\sqrt[3]{{4}}$
-""")
+plt.scatter(x_ratio, v_rep_norm, marker="o", alpha=0.5)
+plt.plot(x_ratio, analytical, linestyle="--", color="k")
+plt.xlabel("$x_{l}/x_{h}$")
+plt.ylabel("$v_{rep}/v_{max}$")
+# text_plot = plt.text(0.0, 2.0, 
+# f"""Values for $p$ in $r_{{rep}} = r_{{low}} + \\frac{{r_{{high}}-r_{{low}}}}{{p}}$
+# based on uniform random distributions with {size} 
+# samples of radii from $r_{{low}}$ to $r_{{high}}$""")
+
+# text_plot = plt.text(0.6, 1.65, 
+# """Analytical solution (dashed)
+# $p = (2-\\sqrt[3]{{4}}) \\frac{{r_{{low}}}}{{r_{{high}}}} + \\sqrt[3]{{4}}$
+# """)
 plt.show()
 ```
 
@@ -223,61 +227,61 @@ The second is a function of the curvature of the sample.
 
 ```{python}
 
-from gsd_lib import GSD, MinimalPackingGenerator
-import numpy as np
-import matplotlib.pyplot as plt
+# from gsd_lib import GSD, MinimalPackingGenerator
+# import numpy as np
+# import matplotlib.pyplot as plt
 
-d_max_d_min = []
-m_max_m_min = []
-norm_s = []
-q_ns = []
-errorses = []
-iterations = []
+# d_max_d_min = []
+# m_max_m_min = []
+# norm_s = []
+# q_ns = []
+# errorses = []
+# iterations = []
 
-sieves = 15
-rng = np.random.default_rng()
+# sieves = 15
+# rng = np.random.default_rng()
 
-for i in range(10000):
-    # Example usage similar to the original main function
+# for i in range(10000):
+#     # Example usage similar to the original main function
     
-    # d = unique_random_sorted(sieves, 0.075, 75)
-    d = np.array([0.00075,0.075, 0.15, 0.3, 0.6, 1.18, 2.36, 4.75, 9.5, 19, 25, 37.5, 50, 63, 75])
+#     # d = unique_random_sorted(sieves, 0.075, 75)
+#     d = np.array([0.00075,0.075, 0.15, 0.3, 0.6, 1.18, 2.36, 4.75, 9.5, 19, 25, 37.5, 50, 63, 75])
     
-    mass = (101 - 1) * rng.random(sieves) + 1
-    mass[-1] = 0.0  # Ensure last mass is zero
-    # mass = [6.93546639, 12.49031735, 9.29866496, 8.61983351, 0.0]
+#     mass = (101 - 1) * rng.random(sieves) + 1
+#     mass[-1] = 0.0  # Ensure last mass is zero
+#     # mass = [6.93546639, 12.49031735, 9.29866496, 8.61983351, 0.0]
 
-    # Create GSD
-    g = GSD(sizes=d, masses=mass)
+#     # Create GSD
+#     g = GSD(sizes=d, masses=mass)
 
-    # Create minimal packing generator
-    sgen = MinimalPackingGenerator(g)
-    s = sgen.mps
+#     # Create minimal packing generator
+#     sgen = MinimalPackingGenerator(g)
+#     s = sgen.mps
 
-    d_max_d_min.append(s.sizes[-1] / s.sizes[0])
-    m_max_m_min.append(s.total_masses[-1] / s.total_masses[0])
-    norm_s.append(np.sum(s.quantities))
-    q_ns.append(s.quantities[-1])
-    errorses.append(sgen.errors)
-    iterations.append(sgen._iteration)
+#     d_max_d_min.append(s.sizes[-1] / s.sizes[0])
+#     m_max_m_min.append(s.total_masses[-1] / s.total_masses[0])
+#     norm_s.append(np.sum(s.quantities))
+#     q_ns.append(s.quantities[-1])
+#     errorses.append(sgen.errors)
+#     iterations.append(sgen._iteration)
 
-d_max_d_min = np.array(d_max_d_min)
-m_max_m_min = np.array(m_max_m_min)
-norm_s = np.array(norm_s)
-q_ns = np.array(q_ns)
-# errorses = np.array(errorses)
-iterations = np.array(iterations)
+# d_max_d_min = np.array(d_max_d_min)
+# m_max_m_min = np.array(m_max_m_min)
+# norm_s = np.array(norm_s)
+# q_ns = np.array(q_ns)
+# # errorses = np.array(errorses)
+# iterations = np.array(iterations)
 ```
 
 ```{python}
-#| label: fig-qwer
-#| fig-cap: "Exponential increase in N with min/max ratio"
-fig, ax = plt.subplots()
+# | label: fig-qwer
+# #| fig-cap: "Exponential increase in N with min/max ratio"
+# fig, ax = plt.subplots()
 
-sc = ax.scatter(1/m_max_m_min, norm_s, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
-# sc = ax.scatter(m_max_m_min, iterations, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
-ax.set_xscale('log')
-# ax.set_yscale('log')
+# sc = ax.scatter(1/m_max_m_min, norm_s, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
+# # sc = ax.scatter(m_max_m_min, iterations, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
+# ax.set_xscale('log')
+# # ax.set_yscale('log')
 ```
 
 ## Implications for DEM modeling
@@ -289,25 +293,25 @@ The algorithms described above can
 ```{python}
 #| label: fig-asdf
 #| fig-cap: "Interesting trends in reduction in error with increased sample size iteration."
-fig, ax = plt.subplots()
+# fig, ax = plt.subplots()
 
-for i, error in enumerate(errorses):
-    # print(error)
-    # print(i)
-    try:
-        # ax.scatter(np.linspace(1, iterations[i], iterations[i]), np.max(error, axis=1), alpha=0.05, c="k")
-        ax.plot(
-            np.linspace(1, iterations[i], iterations[i]),
-            np.max(error, axis=1),
-            alpha=0.1,
-        )
-    finally:
-        continue
-# sc = ax.scatter(d_max_d_min, norm_s, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
-# sc = ax.scatter(iterations, q_ns, c=q_ns, cmap="viridis", alpha=0.6)
-ax.set_xscale("log")
-ax.set_yscale('log')
-# ax.set_ylim(1e-6, 1e-1)
+# for i, error in enumerate(errorses):
+#     # print(error)
+#     # print(i)
+#     try:
+#         # ax.scatter(np.linspace(1, iterations[i], iterations[i]), np.max(error, axis=1), alpha=0.05, c="k")
+#         ax.plot(
+#             np.linspace(1, iterations[i], iterations[i]),
+#             np.max(error, axis=1),
+#             alpha=0.1,
+#         )
+#     finally:
+#         continue
+# # sc = ax.scatter(d_max_d_min, norm_s, c=q_ns, s=q_ns, cmap="viridis", alpha=0.6)
+# # sc = ax.scatter(iterations, q_ns, c=q_ns, cmap="viridis", alpha=0.6)
+# ax.set_xscale("log")
+# ax.set_yscale('log')
+# # ax.set_ylim(1e-6, 1e-1)
 ```
 
 The rigorous minimal packing may be significantly larger than the first-order approximation or some other packing set within some acceptable tolerance.
