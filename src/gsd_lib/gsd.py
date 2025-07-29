@@ -6,6 +6,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 from .base import IndexedSet
+from .uscs import Simple_sample, classify_uscs
 
 
 def add_boundary_knots(spline):
@@ -37,151 +38,6 @@ def add_boundary_knots(spline):
     rightynext = righty + rightslope * (rightxnext - rightx)
     rightcoeffs = np.array([0, 0, rightslope, rightynext])
     spline.extend(rightcoeffs[..., None], np.r_[rightxnext])
-
-
-# def find_cubic_coefficients(x1, y1, x2, y2):
-#     # Set up the system of equations:
-#     # a*x1^3 + b*x1^2 = y1
-#     # a*x2^3 + b*x2^2 = y2
-#     A = np.array([[x1**3, x1**2], [x2**3, x2**2]])
-#     Y = np.array([y1, y2])
-
-#     # Solve for a and b
-#     a, b = np.linalg.solve(A, Y)
-#     return a, b
-
-
-# def classify_uscs(sizes, percent_passing):
-#     """
-#     Classify a grain size distribution according to USCS standards.
-
-#     Parameters:
-#     -----------
-#     sizes : array-like
-#         Array of sieve sizes in mm
-#     percent_passing : array-like
-#         Array of percent passing values corresponding to sizes
-
-#     Returns:
-#     --------
-#     str
-#         USCS classification symbol
-#     """
-#     sizes = np.asarray(sizes)
-#     percent_passing = np.asarray(percent_passing)
-
-#     # Key sieve sizes (mm)
-#     sieve_200 = 0.075
-#     sieve_4 = 4.75
-
-#     # Interpolate percent passing at key sizes
-#     percent_fines = np.interp(sieve_200, sizes, percent_passing)
-#     percent_gravel = 1 - np.interp(sieve_4, sizes, percent_passing)
-
-#     # Coarse-grained soils (< 50% passing #200)
-#     if percent_fines < 0.5:
-#         if percent_gravel > 0.5:
-#             # Gravel
-#             if percent_fines < 0.05:
-#                 # Clean gravel - check gradation
-#                 cu, cc = _gradation_parameters(sizes, percent_passing)
-#                 if cu >= 4 and 1 <= cc <= 3:
-#                     return "GW"  # Well-graded gravel
-#                 else:
-#                     return "GP"  # Poorly graded gravel
-#             elif 0.05 <= percent_fines <= 0.12:
-#                 # Borderline - dual symbol
-#                 cu, cc = _gradation_parameters(sizes, percent_passing)
-#                 if cu >= 4 and 1 <= cc <= 3:
-#                     return "GW-GM" if _is_silty(sizes, percent_passing) else "GW-GC"
-#                 else:
-#                     return "GP-GM" if _is_silty(sizes, percent_passing) else "GP-GC"
-#             else:
-#                 # Gravel with fines
-#                 return "GM" if _is_silty(sizes, percent_passing) else "GC"
-#         else:
-#             # Sand
-#             if percent_fines < 0.05:
-#                 # Clean sand - check gradation
-#                 cu, cc = _gradation_parameters(sizes, percent_passing)
-#                 if cu >= 6 and 1 <= cc <= 3:
-#                     return "SW"  # Well-graded sand
-#                 else:
-#                     return "SP"  # Poorly graded sand
-#             elif 0.05 <= percent_fines <= 0.12:
-#                 # Borderline - dual symbol
-#                 cu, cc = _gradation_parameters(sizes, percent_passing)
-#                 if cu >= 6 and 1 <= cc <= 3:
-#                     return "SW-SM" if _is_silty(sizes, percent_passing) else "SW-SC"
-#                 else:
-#                     return "SP-SM" if _is_silty(sizes, percent_passing) else "SP-SC"
-#             else:
-#                 # Sand with fines
-#                 return "SM" if _is_silty(sizes, percent_passing) else "SC"
-
-#     # Fine-grained soils (≥ 50% passing #200)
-#     else:
-#         # For fine-grained soils, Atterberg limits are needed for proper classification
-#         # Return generic classifications
-#         return (
-#             "ML/CL"  # Silt/clay - requires Atterberg limits for precise classification
-#         )
-
-
-def _gradation_parameters(sizes, percent_passing):
-    """
-    Calculate uniformity coefficient (Cu) and coefficient of curvature (Cc).
-
-    Parameters:
-    -----------
-    sizes : array-like
-        Array of sieve sizes in mm
-    percent_passing : array-like
-        Array of percent passing values
-
-    Returns:
-    --------
-    tuple
-        (Cu, Cc) - uniformity coefficient and coefficient of curvature
-    """
-    # Find D10, D30, D60 (grain sizes at 10%, 30%, 60% passing)
-    d10 = np.interp(0.10, percent_passing, sizes)
-    d30 = np.interp(0.30, percent_passing, sizes)
-    d60 = np.interp(0.60, percent_passing, sizes)
-
-    cu = d60 / d10 if d10 > 0 else np.inf
-    cc = (d30**2) / (d60 * d10) if d60 > 0 and d10 > 0 else 0
-
-    return cu, cc
-
-
-def _is_silty(sizes, percent_passing):
-    """
-    Determine if fine fraction is silty based on grain size distribution.
-
-    This is a simplified classification - proper classification requires
-    Atterberg limit tests.
-
-    Parameters:
-    -----------
-    sizes : array-like
-        Array of sieve sizes in mm
-    percent_passing : array-like
-        Array of percent passing values
-
-    Returns:
-    --------
-    bool
-        True if classified as silty, False if clayey
-    """
-    # This is a simplified heuristic - actual classification requires plasticity tests
-    # For demonstration, assume silty if distribution is more uniform in fine range
-    fine_sizes = sizes[sizes <= 0.075]
-    if len(fine_sizes) > 1:
-        fine_passing = percent_passing[sizes <= 0.075]
-        # Simple heuristic: more uniform = silty
-        return np.std(fine_passing) < 0.20
-    return True  # Default to silty
 
 
 class GSD(IndexedSet):
@@ -300,6 +156,158 @@ class GSD(IndexedSet):
 
         return np.array(sample_percent_retained) - self.percent_retained
 
+    def _i_gs_curve(self, lower_bound=0.001, upper_bound=75.0):
+        """
+        Extend the GSD curve over tha required range for defining the grain-size index, I_GS as described by (Erguler, 2016).
+        The range is from 0.001 to 75 mm."""
+        size_points = self.sizes
+        gsd_curve = self.percent_passing
+
+        # These commented out lines complete I_GS, but I'm turning them off for now.
+        # This makes a modified I_GS that is more appropriate for the MPS work I'm doing right now.
+        if size_points[-1] < upper_bound:
+            size_points = np.insert(size_points, len(size_points), upper_bound)
+            gsd_curve = np.insert(gsd_curve, len(gsd_curve), gsd_curve[-1])
+            # size_points = np.concatenate(
+            #     [size_points, np.linspace(size_points[-1], right_bound, n_extend)]
+            # )
+            # gsd_curve = np.concatenate([gsd_curve, np.ones(n_extend) * gsd_curve[-1]])
+
+        if size_points[0] > lower_bound:
+            size_points = np.insert(size_points, 0, lower_bound)
+            gsd_curve = np.insert(gsd_curve, 0, gsd_curve[0])
+
+        if size_points[0] < lower_bound:
+            gs_min = np.interp(np.log10(lower_bound), np.log10(size_points), gsd_curve)
+            size_points[0] = lower_bound
+            gsd_curve[0] = gs_min
+            # spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+            # add_boundary_knots(spline)
+            # log_size = np.linspace(np.log10(lower_bound), log_size[-1], 100)
+            # gsd_curve = spline(log_size, nu=0)
+
+        return np.log10(size_points), gsd_curve
+
+    def _percent_in_range(self, range: tuple):
+        """
+        Calculate the percent of the GSD that falls within a specified range.
+
+        Parameters:
+        -----------
+        range : tuple
+            A tuple specifying the lower and upper bounds of the range (lower, upper).
+
+        Returns:
+        --------
+        float
+            The percent of the GSD that falls within the specified range.
+        """
+        if len(self.sizes) == 0:
+            return 0.0
+
+        lower_bound, upper_bound = range
+        mask = (self.sizes >= lower_bound) & (self.sizes < upper_bound)
+        return np.sum(self.percent_retained[mask])
+
+    @property
+    def percent_fines(self):
+        """
+        Calculate the percent of fines in the GSD.
+
+        Returns:
+        --------
+        float
+            The percent of fines in the GSD.
+        """
+        return self._percent_in_range((0, 0.075))
+
+    @property
+    def percent_sand(self):
+        """
+        Calculate the percent of sand in the GSD.
+
+        Returns:
+        --------
+        float
+            The percent of sand in the GSD.
+        """
+        return self._percent_in_range((0.075, 4.75))
+
+    @property
+    def percent_gravel(self):
+        """
+        Calculate the percent of gravel in the GSD.
+
+        Returns:
+        --------
+        float
+            The percent of gravel in the GSD.
+        """
+        return self._percent_in_range((4.75, 75.0))
+
+    @property
+    def curvature(self):
+        """
+        Calculate the curvature of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Curvature of the GSD curve, defined as the maximum curvature divided by the range of sizes
+        """
+        log_size = np.log10(self.sizes)
+        gsd_curve = self.percent_passing
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        second_derivative = spline(log_size, nu=2)
+        return second_derivative
+
+    @property
+    def slope(self):
+        """
+        Calculate the maximum slope of the GSD curve.
+
+        Returns:
+        --------
+        float
+            Maximum slope of the GSD curve
+        """
+        log_size = np.log10(self.sizes)
+        gsd_curve = self.percent_passing
+        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
+        add_boundary_knots(spline)
+        first_derivative = spline(log_size, nu=1)
+        return first_derivative
+
+    @property
+    def gs_index(self):
+        """
+        Calculate the grain-size index (I_GS) as described by Erguler (2016).
+        """
+        log_size, gsd_curve = self._i_gs_curve()
+        a_t = log_size[-1] - log_size[0]
+        a_c = np.trapezoid(gsd_curve, log_size)
+        return a_c / a_t
+
+    @property
+    def curvature_index(self):
+        """
+        Calculate the grain-size index (I_GS) modified to describe only the grain sieve sizes included in the GSD.
+        """
+        log_size = np.log10(self.sizes)
+        # End points for slope calculation:
+        a = 1
+        b = -1
+        base = log_size[b] - log_size[a]
+        slope = (self.percent_passing[b] - self.percent_passing[a]) / base
+
+        uncurved_area = (0 * self.percent_passing[a] + (slope / 2)) * base**2
+        area = (
+            np.trapezoid(self.percent_passing[a:], log_size[a:])
+            - base * self.percent_passing[a]
+        )
+        return area / uncurved_area
+
     def _d_percent(self, percent, suppress_warnings=False):
         """
         Find the size corresponding to a given percent passing.
@@ -315,176 +323,14 @@ class GSD(IndexedSet):
                 UserWarning,
             )
 
-            spline = CubicSpline(log_size, self.percent_passing, bc_type="natural")
+            spline = CubicSpline(self.percent_passing, log_size, bc_type="natural")
             # extend the natural natural spline with linear extrapolating knots
             add_boundary_knots(spline)
             log_size = np.linspace(0.0001, log_size[-1], 1000)
             gsd_curve = spline(log_size, nu=0)
 
-        log_d = np.interp(percent, log_size, gsd_curve)
+        log_d = np.interp(percent, gsd_curve, log_size)
         return 10**log_d
-
-    def _i_gs_curve(self):
-        """
-        Extend the GSD curve over tha required range for defining the grain-size index, I_GS as described by (Erguler, 2016).
-        The range is from 0.001 to 75 mm."""
-        left_bound = 0.0001
-        right_bound = 75.0
-
-        size_points = self.sizes
-        gsd_curve = self.percent_passing
-        n_extend = 10
-
-        # These commented out lines complete I_GS, but I'm turning them off for now.
-        # This makes a modified I_GS that is more appropriate for the MPS work I'm doing right now.
-        # if size_points[-1] < right_bound:
-        #     size_points = np.concatenate(
-        #         [size_points, np.linspace(size_points[-1], right_bound, n_extend)]
-        #     )
-        #     gsd_curve = np.concatenate([gsd_curve, np.ones(n_extend) * gsd_curve[-1]])
-
-        log_size = np.log10(size_points)
-
-        if size_points[0] > left_bound:
-            spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-            add_boundary_knots(spline)
-            log_size = np.linspace(np.log10(left_bound), log_size[-1], 100)
-            gsd_curve = spline(log_size, nu=0)
-
-        return log_size, gsd_curve
-
-    @property
-    def max_curvature(self):
-        """
-        Calculate the maximum curvature of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Maximum curvature of the GSD curve
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(log_size, nu=2)
-        return np.max(np.abs(second_derivative))
-
-    @property
-    def max_positive_curvature(self):
-        """
-        Calculate the maximum positive curvature of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Maximum positive curvature of the GSD curve
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(log_size, nu=2)
-        return (
-            np.max(second_derivative[second_derivative > 0])
-            if np.any(second_derivative > 0)
-            else 0.0
-        )
-
-    @property
-    def max_negative_curvature(self):
-        """
-        Calculate the maximum negative curvature of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Maximum negative curvature of the GSD curve
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(log_size, nu=2)
-        return (
-            np.min(second_derivative[second_derivative < 0])
-            if np.any(second_derivative < 0)
-            else 0.0
-        )
-
-    @property
-    def concavity_on_linear(self):
-        """
-        Calculate the concavity of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Concavity of the GSD curve, defined as the maximum curvature divided by the range of sizes
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(10**log_size, nu=2)
-        return second_derivative
-
-    @property
-    def concavity_on_log(self):
-        """
-        Calculate the concavity of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Concavity of the GSD curve, defined as the maximum curvature divided by the range of sizes
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(log_size, nu=2)
-        return second_derivative
-
-    @property
-    def average_curvature(self):
-        """
-        Calculate the average curvature of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Average curvature of the GSD curve, defined as the integral of the absolute value of the second derivative
-            divided by the range of sizes
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        second_derivative = spline(log_size, nu=2)
-        integral_curvature = np.trapz(np.abs(second_derivative), log_size)
-        size_range = log_size[-1] - log_size[0]
-        return integral_curvature / size_range if size_range > 0 else np.inf
-
-    @property
-    def max_slope(self):
-        """
-        Calculate the maximum slope of the GSD curve.
-
-        Returns:
-        --------
-        float
-            Maximum slope of the GSD curve
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        spline = CubicSpline(log_size, gsd_curve, bc_type="natural")
-        add_boundary_knots(spline)
-        first_derivative = spline(log_size, nu=1)
-        return np.max(np.abs(first_derivative))
-
-    @property
-    def i_gs(self):
-        """
-        Calculate the grain-size index (I_GS) as described by Erguler (2016).
-        """
-        log_size, gsd_curve = self._i_gs_curve()
-        a_t = log_size[-1] - log_size[0]
-        a_c = np.trapezoid(gsd_curve, log_size)
-        return a_c / a_t
 
     @property
     def d_10(self):
@@ -564,7 +410,8 @@ class GSD(IndexedSet):
         reverse_cumulative_retained = np.cumsum(self.percent_retained[::-1])[::-1]
         return 1.0 - reverse_cumulative_retained
 
-    def uscs_classification(self):
+    @property
+    def uscs_symbol(self):
         """
         Classify this GSD according to USCS standards.
 
@@ -573,4 +420,32 @@ class GSD(IndexedSet):
         str
             USCS classification symbol
         """
-        return classify_uscs(self.sizes, self.percent_passing)
+        sample = Simple_sample(
+            gravel=self.percent_gravel,
+            sand=self.percent_sand,
+            fines=self.percent_fines,
+            cu=self.cu,
+            cc=self.cc,
+        )
+        classify_uscs(sample)
+        return sample.group_symbol
+
+    @property
+    def uscs_name(self):
+        """
+        Get the USCS classification name.
+
+        Returns:
+        --------
+        str
+            USCS classification name
+        """
+        sample = Simple_sample(
+            gravel=self.percent_gravel,
+            sand=self.percent_sand,
+            fines=self.percent_fines,
+            cu=self.cu,
+            cc=self.cc,
+        )
+        classify_uscs(sample)
+        return sample.group_name
