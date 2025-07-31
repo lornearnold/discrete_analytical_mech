@@ -102,15 +102,18 @@ Conceptually, each of these are collections of items (i.e., sets) with specific 
 A sample, $S$ is an indexed set describing its particles as pairs of size, $X_S$, and quantity, $Q_S$.
 $X_S$ is an ordered (i.e., each entry is larger than the previous) set of unique values of positive real numbers.
 $Q_s$ is an unordered set of positive integers related to $X_S$ by a shared indexing set for the sample, $I_S$.
-<!-- Linear dimensions (i.e., radius or diameter) are typically used to describe particle size in geomechanics. -->
 
-$$S = \{(X, Q) \in I_S\}$$ where:
+$$S = \{(X, Q) \in I_S\}$$ {#eq-sample_def} where:
 
-$X_S = \{x_i : i \in I_S\}$ with $x_1 < x_2 < \cdots < x_{n_S}$
+$$X_S = \{x_i : i \in I_S\} \text{ with } x_1 < x_2 < \cdots < x_{n_S}$$ {#eq-size_sample}
 
-$Q = \{q_i : i \in I_S\}$
+$$
+Q = \{q_i : i \in I_S\}
+$$ {#eq-quantity_sample}
 
-$X_S \subset \mathbb{R}^+$ and $Q \subset \mathbb{Z}^+$
+$$
+X_S \subset \mathbb{R}^+ \text{ and } Q \subset \mathbb{Z}^+
+$$ {#eq-domains_sample}
 
 ### Grain size distribution definition
 
@@ -119,18 +122,20 @@ It is and indexed set describing size boundaries, $X_G$, and masses, $M_G$.
 Like $X_S$, $X_G$ is an ordered set of unique values, however, it's domain also includes zero (representing the pan in a typical sieve analysis).
 Like $Q_S$, $M_G$ shares an index ($I_G$) with the size set, but it's domain is not restricted to integers, only to non-negative real numbers.
 The values in $M_G$ represent the masses retained on a sieve with opening size $X_G$.
-In order for $G$ to be "complete", the last entry in $M_G$ (i.e., $m_{nG}$) must be zero.
-This condition ensures that $x_{nG}$ provides an upper bound to the sizes described by $G$.
 
-$$G = \{(X_G, M_G) \in I_G\}$$ where:
+$$G = \{(X_G, M_G) \in I_G\}$$ {#eq-gsd_def} where:
 
-$X_G = \{x_j : j \in I_G\}$ with $x_1 < x_2 < \cdots < x_{n_G}$
+$$
+X_G = \{x_j : j \in I_G\} \text{ where } x_1 < x_2 < \cdots < x_{n_G}
+$$ {#eq-size_gsd}
 
-$M = \{m_j : j \in I_G\}$
+$$
+M = \{m_j : j \in I_G\}
+$$ {#eq-mass_gsd}
 
-$X_G \subset \mathbb{R}^{non-neg}$ and $V \subset \mathbb{R}^{non-neg}$
-
-**Condition 0** (completeness): $$G \text{is complete} \Leftrightarrow v_{n_G} = 0$$
+$$
+X_G \subset \mathbb{R}^{non-neg} \text{ ; } V \subset \mathbb{R}^{non-neg}
+$$ {#eq-domains_gsd}
 
 ### Comparison definition
 
@@ -142,6 +147,9 @@ On the other hand, a discrete sample (either physical or numerical) exists on it
 Therefore the relationship between $S$ and $G$ will be defined in terms of $G$'s description of $S$.
 In a later section, the topic of finding an instance of $S$ that *matches* a target $G$ will be addressed.
 
+In order for $G$ to be "complete", the last entry in $M_G$ (i.e., $m_{nG}$) must be zero.
+This condition ensures that $x_{nG}$ provides an upper bound to the sizes described by $G$.
+
 In order for $G$ to describe $S$, it must be complete (Condition 0) and its smallest size must be smaller than any size in $S$ and its largest size must be larger than any size in $S$ (Condition 1).
 $G$ provides an *accurate* description of $S$ if the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$ (Condition 2).
 As indicated in the equation below, "between" assumes (something about whether equal means retained or not).
@@ -151,13 +159,28 @@ However, two additional conditions are useful in describing different scenarios.
 The description of $S$ by $G$ is *efficient* if there are no pairs of sizes in $X_G$ that do not bound at least one entry in $X_S$ (Condition 3).
 The description of $S$ by $G$ is *articulate* if there is no pairs of sizes in $X_S$ without at least one entry in $X_G$ between them (Condition 4).
 
-**Condition 1:** $G$ describes $S$ if $\min(X_G) < \min(X_S)$ and $\max(X_G) \ge \max(X_S)$
+**Condition 1** (completeness): $$G \text{ is complete } \Leftrightarrow m_{n_G} = 0$$ {#eq-gsd_complete}
 
-**Condition 2:** $G$ describes $S$ accurately if for all consecutive pairs $(x_j, x_{j+1})$ in $X_G$: $$m_j = \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i)$$ where $f(x)$ is a scaling function that converts size to mass.
+**Condition 2:**
 
-**Condition 3:** $G$ describes $S$ efficiently if $\forall (x_j, x_{j+1})$ consecutive in $X_G$, $\exists x_i \in X_S$ such that $x_j < x_i \le x_{j+1}$
+$$
+G \longrightarrow S \Leftrightarrow \min(X_G) < \min(X_S) \land \max(X_G) \ge \max(X_S)
+$$ {#eq-gds_describes}
 
-**Condition 4:** $G$ describes $S$ articulately if $\forall (x_i, x_{i+1})$ consecutive in $X_S$, $\exists x_j \in X_G$ such that $x_i \le x_j < x_{i+1}$
+**Condition 3:** $$
+G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j$$ {#eq-gsd_accurate} where $f(x)$ is a scaling function that converts size to mass.
+
+**Condition 4:**
+
+$$
+G \stackrel{\text{efficiently}}{\longrightarrow} S \Leftrightarrow \forall (x_j, x_{j+1}) \in X_G  \space \exists \space (x_j < x_i \in X_S \le x_{j+1})
+$$ {#eq-gsd_efficient}
+
+**Condition 5:**
+
+$$
+G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \forall (x_i, x_{i+1}) \in X_S \space \exists \space (x_i < x_j \in X_G \le x_{i+1})
+$$ {#eq-gsd_articulate}
 
 ### Physical interpretation
 

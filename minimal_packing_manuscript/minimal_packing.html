@@ -3302,7 +3302,7 @@ window.Quarto = {
 </section>
 <section id="introduction" class="level2">
 <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
-<div id="63ca5e4c" class="cell" data-execution_count="1">
+<div id="d598abf9" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Show the code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys</span>
@@ -3329,30 +3329,51 @@ window.Quarto = {
 <p>Identifying the mimimal packing set requires rigorous mathematical definitions for particulate samples, <span class="math inline">\(S\)</span>, and grain size distributions, <span class="math inline">\(G\)</span>. Conceptually, each of these are collections of items (i.e., sets) with specific restrictions.</p>
 <section id="sample-definition" class="level3">
 <h3 class="anchored" data-anchor-id="sample-definition">Sample definition</h3>
-<p>A sample, <span class="math inline">\(S\)</span> is an indexed set describing its particles as pairs of size, <span class="math inline">\(X_S\)</span>, and quantity, <span class="math inline">\(Q_S\)</span>. <span class="math inline">\(X_S\)</span> is an ordered (i.e., each entry is larger than the previous) set of unique values of positive real numbers. <span class="math inline">\(Q_s\)</span> is an unordered set of positive integers related to <span class="math inline">\(X_S\)</span> by a shared indexing set for the sample, <span class="math inline">\(I_S\)</span>. <!-- Linear dimensions (i.e., radius or diameter) are typically used to describe particle size in geomechanics. --></p>
-<p><span class="math display">\[S = \{(X, Q) \in I_S\}\]</span> where:</p>
-<p><span class="math inline">\(X_S = \{x_i : i \in I_S\}\)</span> with <span class="math inline">\(x_1 &lt; x_2 &lt; \cdots &lt; x_{n_S}\)</span></p>
-<p><span class="math inline">\(Q = \{q_i : i \in I_S\}\)</span></p>
-<p><span class="math inline">\(X_S \subset \mathbb{R}^+\)</span> and <span class="math inline">\(Q \subset \mathbb{Z}^+\)</span></p>
+<p>A sample, <span class="math inline">\(S\)</span> is an indexed set describing its particles as pairs of size, <span class="math inline">\(X_S\)</span>, and quantity, <span class="math inline">\(Q_S\)</span>. <span class="math inline">\(X_S\)</span> is an ordered (i.e., each entry is larger than the previous) set of unique values of positive real numbers. <span class="math inline">\(Q_s\)</span> is an unordered set of positive integers related to <span class="math inline">\(X_S\)</span> by a shared indexing set for the sample, <span class="math inline">\(I_S\)</span>.</p>
+<p><span id="eq-sample_def"><span class="math display">\[S = \{(X, Q) \in I_S\} \tag{1}\]</span></span> where:</p>
+<p><span id="eq-size_sample"><span class="math display">\[X_S = \{x_i : i \in I_S\} \text{ with } x_1 &lt; x_2 &lt; \cdots &lt; x_{n_S} \tag{2}\]</span></span></p>
+<p><span id="eq-quantity_sample"><span class="math display">\[
+Q = \{q_i : i \in I_S\}
+\tag{3}\]</span></span></p>
+<p><span id="eq-domains_sample"><span class="math display">\[
+X_S \subset \mathbb{R}^+ \text{ and } Q \subset \mathbb{Z}^+
+\tag{4}\]</span></span></p>
 </section>
 <section id="grain-size-distribution-definition" class="level3">
 <h3 class="anchored" data-anchor-id="grain-size-distribution-definition">Grain size distribution definition</h3>
-<p>The grain size distribution, <span class="math inline">\(G\)</span>, has a similar structure. It is and indexed set describing size boundaries, <span class="math inline">\(X_G\)</span>, and masses, <span class="math inline">\(M_G\)</span>. Like <span class="math inline">\(X_S\)</span>, <span class="math inline">\(X_G\)</span> is an ordered set of unique values, however, it’s domain also includes zero (representing the pan in a typical sieve analysis). Like <span class="math inline">\(Q_S\)</span>, <span class="math inline">\(M_G\)</span> shares an index (<span class="math inline">\(I_G\)</span>) with the size set, but it’s domain is not restricted to integers, only to non-negative real numbers. The values in <span class="math inline">\(M_G\)</span> represent the masses retained on a sieve with opening size <span class="math inline">\(X_G\)</span>. In order for <span class="math inline">\(G\)</span> to be “complete”, the last entry in <span class="math inline">\(M_G\)</span> (i.e., <span class="math inline">\(m_{nG}\)</span>) must be zero. This condition ensures that <span class="math inline">\(x_{nG}\)</span> provides an upper bound to the sizes described by <span class="math inline">\(G\)</span>.</p>
-<p><span class="math display">\[G = \{(X_G, M_G) \in I_G\}\]</span> where:</p>
-<p><span class="math inline">\(X_G = \{x_j : j \in I_G\}\)</span> with <span class="math inline">\(x_1 &lt; x_2 &lt; \cdots &lt; x_{n_G}\)</span></p>
-<p><span class="math inline">\(M = \{m_j : j \in I_G\}\)</span></p>
-<p><span class="math inline">\(X_G \subset \mathbb{R}^{non-neg}\)</span> and <span class="math inline">\(V \subset \mathbb{R}^{non-neg}\)</span></p>
-<p><strong>Condition 0</strong> (completeness): <span class="math display">\[G \text{is complete} \Leftrightarrow v_{n_G} = 0\]</span></p>
+<p>The grain size distribution, <span class="math inline">\(G\)</span>, has a similar structure. It is and indexed set describing size boundaries, <span class="math inline">\(X_G\)</span>, and masses, <span class="math inline">\(M_G\)</span>. Like <span class="math inline">\(X_S\)</span>, <span class="math inline">\(X_G\)</span> is an ordered set of unique values, however, it’s domain also includes zero (representing the pan in a typical sieve analysis). Like <span class="math inline">\(Q_S\)</span>, <span class="math inline">\(M_G\)</span> shares an index (<span class="math inline">\(I_G\)</span>) with the size set, but it’s domain is not restricted to integers, only to non-negative real numbers. The values in <span class="math inline">\(M_G\)</span> represent the masses retained on a sieve with opening size <span class="math inline">\(X_G\)</span>.</p>
+<p><span id="eq-gsd_def"><span class="math display">\[G = \{(X_G, M_G) \in I_G\} \tag{5}\]</span></span> where:</p>
+<p><span id="eq-size_gsd"><span class="math display">\[
+X_G = \{x_j : j \in I_G\} \text{ where } x_1 &lt; x_2 &lt; \cdots &lt; x_{n_G}
+\tag{6}\]</span></span></p>
+<p><span id="eq-mass_gsd"><span class="math display">\[
+M = \{m_j : j \in I_G\}
+\tag{7}\]</span></span></p>
+<p><span id="eq-domains_gsd"><span class="math display">\[
+X_G \subset \mathbb{R}^{non-neg} \text{ ; } V \subset \mathbb{R}^{non-neg}
+\tag{8}\]</span></span></p>
 </section>
 <section id="comparison-definition" class="level3">
 <h3 class="anchored" data-anchor-id="comparison-definition">Comparison definition</h3>
 <p>The relationship between <span class="math inline">\(S\)</span> and <span class="math inline">\(G\)</span> need to quantify the match between the two in several respects. These are presented in the following section with <span class="math inline">\(G\)</span> being used to <em>describe</em> <span class="math inline">\(S\)</span>. In the context of DEM modeling, this may seem backward. After all, in DEM modeling, a target GSD is generally defined first, with a sample generated to match it. On the other hand, a discrete sample (either physical or numerical) exists on its own, whereas a GSD only has meaning when interpreted as a description of a sample. Therefore the relationship between <span class="math inline">\(S\)</span> and <span class="math inline">\(G\)</span> will be defined in terms of <span class="math inline">\(G\)</span>’s description of <span class="math inline">\(S\)</span>. In a later section, the topic of finding an instance of <span class="math inline">\(S\)</span> that <em>matches</em> a target <span class="math inline">\(G\)</span> will be addressed.</p>
+<p>In order for <span class="math inline">\(G\)</span> to be “complete”, the last entry in <span class="math inline">\(M_G\)</span> (i.e., <span class="math inline">\(m_{nG}\)</span>) must be zero. This condition ensures that <span class="math inline">\(x_{nG}\)</span> provides an upper bound to the sizes described by <span class="math inline">\(G\)</span>.</p>
 <p>In order for <span class="math inline">\(G\)</span> to describe <span class="math inline">\(S\)</span>, it must be complete (Condition 0) and its smallest size must be smaller than any size in <span class="math inline">\(S\)</span> and its largest size must be larger than any size in <span class="math inline">\(S\)</span> (Condition 1). <span class="math inline">\(G\)</span> provides an <em>accurate</em> description of <span class="math inline">\(S\)</span> if the combined masses of all the particles with sizes between every pair of sizes in <span class="math inline">\(X_G\)</span> is equal to the retained mass on the lower of the size pairs in <span class="math inline">\(G\)</span> (Condition 2). As indicated in the equation below, “between” assumes (something about whether equal means retained or not).</p>
 <p>Conditions 0, 1, and 2 are sufficient to identify a minimal packing set. However, two additional conditions are useful in describing different scenarios. The description of <span class="math inline">\(S\)</span> by <span class="math inline">\(G\)</span> is <em>efficient</em> if there are no pairs of sizes in <span class="math inline">\(X_G\)</span> that do not bound at least one entry in <span class="math inline">\(X_S\)</span> (Condition 3). The description of <span class="math inline">\(S\)</span> by <span class="math inline">\(G\)</span> is <em>articulate</em> if there is no pairs of sizes in <span class="math inline">\(X_S\)</span> without at least one entry in <span class="math inline">\(X_G\)</span> between them (Condition 4).</p>
-<p><strong>Condition 1:</strong> <span class="math inline">\(G\)</span> describes <span class="math inline">\(S\)</span> if <span class="math inline">\(\min(X_G) &lt; \min(X_S)\)</span> and <span class="math inline">\(\max(X_G) \ge \max(X_S)\)</span></p>
-<p><strong>Condition 2:</strong> <span class="math inline">\(G\)</span> describes <span class="math inline">\(S\)</span> accurately if for all consecutive pairs <span class="math inline">\((x_j, x_{j+1})\)</span> in <span class="math inline">\(X_G\)</span>: <span class="math display">\[m_j = \sum_{\substack{i \in I_S \\ x_j &lt; x_i \le x_{j+1}}} q_i \cdot f(x_i)\]</span> where <span class="math inline">\(f(x)\)</span> is a scaling function that converts size to mass.</p>
-<p><strong>Condition 3:</strong> <span class="math inline">\(G\)</span> describes <span class="math inline">\(S\)</span> efficiently if <span class="math inline">\(\forall (x_j, x_{j+1})\)</span> consecutive in <span class="math inline">\(X_G\)</span>, <span class="math inline">\(\exists x_i \in X_S\)</span> such that <span class="math inline">\(x_j &lt; x_i \le x_{j+1}\)</span></p>
-<p><strong>Condition 4:</strong> <span class="math inline">\(G\)</span> describes <span class="math inline">\(S\)</span> articulately if <span class="math inline">\(\forall (x_i, x_{i+1})\)</span> consecutive in <span class="math inline">\(X_S\)</span>, <span class="math inline">\(\exists x_j \in X_G\)</span> such that <span class="math inline">\(x_i \le x_j &lt; x_{i+1}\)</span></p>
+<p><strong>Condition 1</strong> (completeness): <span id="eq-gsd_complete"><span class="math display">\[G \text{ is complete } \Leftrightarrow m_{n_G} = 0 \tag{9}\]</span></span></p>
+<p><strong>Condition 2:</strong></p>
+<p><span id="eq-gds_describes"><span class="math display">\[
+G \longrightarrow S \Leftrightarrow \min(X_G) &lt; \min(X_S) \land \max(X_G) \ge \max(X_S)
+\tag{10}\]</span></span></p>
+<p><strong>Condition 3:</strong> <span id="eq-gsd_accurate"><span class="math display">\[
+G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \sum_{\substack{i \in I_S \\ x_j &lt; x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j \tag{11}\]</span></span> where <span class="math inline">\(f(x)\)</span> is a scaling function that converts size to mass.</p>
+<p><strong>Condition 4:</strong></p>
+<p><span id="eq-gsd_efficient"><span class="math display">\[
+G \stackrel{\text{efficiently}}{\longrightarrow} S \Leftrightarrow \forall (x_j, x_{j+1}) \in X_G  \space \exists \space (x_j &lt; x_i \in X_S \le x_{j+1})
+\tag{12}\]</span></span></p>
+<p><strong>Condition 5:</strong></p>
+<p><span id="eq-gsd_articulate"><span class="math display">\[
+G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \forall (x_i, x_{i+1}) \in X_S \space \exists \space (x_i &lt; x_j \in X_G \le x_{i+1})
+\tag{13}\]</span></span></p>
 </section>
 <section id="physical-interpretation" class="level3">
 <h3 class="anchored" data-anchor-id="physical-interpretation">Physical interpretation</h3>
