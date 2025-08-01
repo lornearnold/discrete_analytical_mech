@@ -37,10 +37,104 @@ A mapping of USCS classification and MPS reveals a broad distribution of computa
 import sys
 sys.path.append('..')
 import math
-import gsd_lib as gl
+from gsd_lib import GSD, MinimalPackingGenerator
 import numpy as np
 import scipy.stats as stats
+import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.rcParams.update(
+    {
+        # Figure settings
+        "figure.figsize": (5, 4),
+        "figure.dpi": 400,
+        "savefig.dpi": 600,
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.1,
+        # Font settings
+        "font.size": 12,
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.sans-serif": ["cmss10", "Arial"],
+        # "font.serif": ["Latin Modern", "cmr10"],
+        # "font.monospace": ["cmtt10"],
+        "axes.formatter.use_mathtext": True,
+        "axes.titlesize": 14,
+        "axes.labelsize": 12,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        # Axes settings
+        "axes.linewidth": 1.0,
+        "axes.spines.top": True,
+        "axes.spines.right": True,
+        "axes.grid": True,
+        "grid.alpha": 0.3,
+        "grid.linewidth": 0.5,
+        # Line and marker settings
+        "lines.linewidth": 1.5,
+        "lines.markersize": 6,
+        "scatter.marker": "o",
+        # Legend settings
+        "legend.frameon": True,
+        "legend.framealpha": 0.8,
+        "legend.fancybox": True,
+        "legend.numpoints": 1,
+        # Tick settings
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.major.size": 4,
+        "ytick.major.size": 4,
+        "xtick.minor.size": 2,
+        "ytick.minor.size": 2,
+    }
+)
+
+
+```
+
+```{python}
+
+# Standard U.S. sieve sizes (mm)
+x1 = np.array(
+    [
+        0.0001,  # Pan
+        0.075,  # Number 200 sieve separates coarse from fines
+        0.15,
+        0.3,
+        0.6,
+        1.18,
+        2.36,
+        4.75,  # Number 4 sieve separates sand from gravel
+        9.5,
+        19,
+        25,
+        37.5,
+        50,
+        63,
+        75,  # 3-inch sieve (100% passing this per ASTM D2487-17 1.2)
+
+    ]
+)
+
+sieve_sizes = x1.copy()
+n_sieves = len(sieve_sizes)
+
+# Generate random grain size distributions on the sieve set
+def mass_dist(n_sieves, rng=None, exponent=4.0, extra_randomness = 0):
+    if rng is None:
+        rng = np.random.default_rng()
+    base_dist = 1*np.ones(n_sieves)  + rng.random(n_sieves)
+    lower = 1 + n_sieves // 4
+    upper = 1 + 3 * n_sieves // 4
+    center_idx = rng.integers(lower, upper)
+    distances = np.abs(np.arange(n_sieves) - center_idx) / center_idx
+    scale_factor = np.exp(-exponent * distances)
+    dist = base_dist * scale_factor
+    for i in range(extra_randomness):
+        dist *= 1 + rng.random(n_sieves)   # Add some extra randomness
+    return dist
 ```
 
 Soil is a fundamentally discrete granular material whose complex mechanical behavior emerges from the numerous interactions between its constituent parts.
@@ -139,47 +233,33 @@ $$ {#eq-domains_gsd}
 
 ### Comparison definition
 
-The relationship between $S$ and $G$ need to quantify the match between the two in several respects.
-These are presented in the following section with $G$ being used to *describe* $S$.
-In the context of DEM modeling, this may seem backward.
-After all, in DEM modeling, a target GSD is generally defined first, with a sample generated to match it.
+The relationship between $S$ and $G$ needs to quantify the match between the two in several respects.
+These are presented here with $G$ being used to *describe* $S$.
+In the context of DEM modeling, this may seem backward because typically in DEM modeling, a target GSD is defined first and a sample generated to match it.
 On the other hand, a discrete sample (either physical or numerical) exists on its own, whereas a GSD only has meaning when interpreted as a description of a sample.
 Therefore the relationship between $S$ and $G$ will be defined in terms of $G$'s description of $S$.
 In a later section, the topic of finding an instance of $S$ that *matches* a target $G$ will be addressed.
 
-In order for $G$ to be "complete", the last entry in $M_G$ (i.e., $m_{nG}$) must be zero.
+The relationship between $S$ and $G$ is formalized in three conditions described as follows:
+
+**Condition 1:** $G$ is complete if and only if the final entry in $M_G$ is zero: $$G \text{ is complete } \Leftrightarrow m_{n_G} = 0$$ {#eq-gsd_complete}
+
 This condition ensures that $x_{nG}$ provides an upper bound to the sizes described by $G$.
 
-In order for $G$ to describe $S$, it must be complete (Condition 0) and its smallest size must be smaller than any size in $S$ and its largest size must be larger than any size in $S$ (Condition 1).
-$G$ provides an *accurate* description of $S$ if the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$ (Condition 2).
-As indicated in the equation below, "between" assumes (something about whether equal means retained or not).
-
-Conditions 0, 1, and 2 are sufficient to identify a minimal packing set.
-However, two additional conditions are useful in describing different scenarios.
-The description of $S$ by $G$ is *efficient* if there are no pairs of sizes in $X_G$ that do not bound at least one entry in $X_S$ (Condition 3).
-The description of $S$ by $G$ is *articulate* if there is no pairs of sizes in $X_S$ without at least one entry in $X_G$ between them (Condition 4).
-
-**Condition 1** (completeness): $$G \text{ is complete } \Leftrightarrow m_{n_G} = 0$$ {#eq-gsd_complete}
-
-**Condition 2:**
+**Condition 2:** $G$ describes $S$ (denoted $G \longrightarrow S$) if and only if Condition 1 is met and the its smallest size is smaller than any size in $S$ and its largest size is larger than any size in $S$:
 
 $$
-G \longrightarrow S \Leftrightarrow \min(X_G) < \min(X_S) \land \max(X_G) \ge \max(X_S)
+G \longrightarrow S \Leftrightarrow \text{ Cond1} \land \min(X_G) < \min(X_S) \land \max(X_G) \ge \max(X_S)
 $$ {#eq-gds_describes}
 
-**Condition 3:** $$
-G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j$$ {#eq-gsd_accurate} where $f(x)$ is a scaling function that converts size to mass.
+**Condition 3:** $G$ describes $S$ accurately if Condition 2 is met and the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$: $$
+G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \text{ Cond2} \land \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j$$ {#eq-gsd_accurate} where $f(x)$ is a scaling function that converts size to mass.
+As indicated in the equation below, "between" assumes (something about whether equal means retained or not).
 
-**Condition 4:**
-
-$$
-G \stackrel{\text{efficiently}}{\longrightarrow} S \Leftrightarrow \forall (x_j, x_{j+1}) \in X_G  \space \exists \space (x_j < x_i \in X_S \le x_{j+1})
-$$ {#eq-gsd_efficient}
-
-**Condition 5:**
+**Condition 4:** $G$ describes $S$ articulately if Condition 2 is met and for all consecutive pairs of sizes in $X_S$ there exists at least one size in $X_G$ between them.
 
 $$
-G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \forall (x_i, x_{i+1}) \in X_S \space \exists \space (x_i < x_j \in X_G \le x_{i+1})
+G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \text{ Cond2} \land \forall (x_i, x_{i+1}) \in X_S \space \exists \space (x_i < x_j \in X_G \le x_{i+1})
 $$ {#eq-gsd_articulate}
 
 ### Physical interpretation
@@ -192,22 +272,16 @@ For spherical particles with of uniform density ($\rho$), this is a straightforw
 $$f(x) = \frac{\rho\pi}{6}x^3$$
 
 Note, however, that the use of this particular scaling function is not required in general.
-It is only necessary that $f(x)$ be some mapping of $x \Rightarrow m$.
+It is only necessary that $f(x)$ be some mapping of $x \mapsto  m$.
 
 ## Solving for the minimal packing set
 
-For any given $S$, finding $G$ that accurately describes $S$ is no more complicated that following the grain size analysis procedure described in ASTM D6913.
+For any given $S$, finding $G$ that accurately describes $S$ is no more complicated that following the grain size analysis procedure described in ASTM D6913 [@d18committee].
 The reverse, finding a solution for $S$ that is accurately described by some target $G$, is non-trivial.
 One of the reasons is that unlike a grain size analysis, the sizes of the solution ($X_S$) are bounded, but not explicitly defined.
 Additionally, the goal for this procedure is not only to find any $S$ that is accurately described by $G$, but the minimal packing set $S_{min}$ that is accurately described by $G$.
 
 As a starting point, assuming that $G$ is an articulate description of $S$ and selecting any valid values for $X_S$, an indexed set of mass ratios, $\Phi$, and size ratios, $\Xi$ can be defined:
-
-```{=html}
-<!-- Given a grain size distribution $G$ of spherical particles, the minimal packing set, $S_{mp}$ is the smallest sample (i.e., minimizing $||S||$) that provides a sufficiently good match to $G$. The number of sizes in $S$ will be $n_G - 1$.
-
-In order to match the $G$, we need to fully capture the relations between the particle sizes in terms of ratios of: total mass, individual particle mass, and number of particles. These ratios can be described as: -->
-```
 
 $$\Phi = \{\frac{m_j}{m_{n_G-1}} : j \in I_G\} \text{; with elements } \phi_i$$
 
@@ -215,18 +289,18 @@ $$\Xi = \{\frac{f(x_i)}{f(x_{n_S})} : i \in I_S\} \text{; with elements } \xi_i$
 
 The ratio $\Phi$ describes the masses in $G$ relative the the mass of the largest size retaining mass in $G$.
 The ratio $\Xi$ describes the mass (through the scaling function $f(x)$) of each particle size to that of the largest particle size in $S$.
-Since $\Phi$ describes relative masses of each size and $\Xi$ describes the relative mass per particle of each size, the relative number of particles of each size $\Y$ for any $S$ described by $G$ can be defined by the quotient of each entry in $\Phi$ and $\Xi$:
+Since $\Phi$ describes relative masses of each size and $\Xi$ describes the relative mass per particle of each size, the relative number of particles of each size $\Upsilon$ for any $S$ described by $G$ can be defined by the quotient of each entry in $\Phi$ and $\Xi$:
 
-$$Y = \{\frac{\phi_j}{\xi_{n_S}} : i \in I_S\} \text{; with elements } \upsilon_i$$
+$$\Upsilon = \{\frac{\phi_j}{\xi_{n_S}} : i \in I_S\} \text{; with elements } \upsilon_i$$
 
-The ratio $Y$ is directly proportional to the key target parameter, $Q$, describing the quantities of each particle size in $S$.
-Unfortunately, with the exception of $\upsilon_{nS}$, the entries in $Y$ are not guaranteed to be integers, which is a requirement for $Q$.
-Multiples of $Y$ can be used to find its smallest possible integer representation.
-If some level of tolerable error can be specified, each successive iteration of multiples of $Y$ can be mapped to its closest integer representation and compared to the target $G$ to assess its error (i.e., how far Condition 2 is from being satisfied).
+The ratio $\Upsilon$ is directly proportional to the key target parameter, $Q$, describing the quantities of each particle size in $S$.
+Unfortunately, with the exception of $\upsilon_{nS}$, the entries in $\Upsilon$ are not guaranteed to be integers, which is a requirement for $Q$.
+Multiples of $\Upsilon$ can be used to find its smallest possible integer representation.
+If some level of tolerable error can be specified, each successive iteration of multiples of $Y$ can be mapped to its closest integer representation and compared to the target $G$ to assess its error (i.e., how far $\text{Cond3}$ is from being satisfied).
 If the initial assumed sizes are held constant, this iterative approach will find the minimum set that meets a given error tolerance for the selected sizes.
 
 But since the sizes in $X_S$ are only bounded by $X_G$ and not explicitly defined, the opportunity exists to find a better selection of entries in $X_S$ that will minimize $Q_S$.
-This approach is equivalent to dropping the articulate description (Condition 3) requirement from the initial attempt.
+This approach is equivalent to dropping the articulate description ($\text{Cond3}$) requirement from the initial attempt.
 The best allowable sizes for $X_S$ can be found using the following steps:
 
 1)  Find the quantity ratios associated with the minimum ($-$) and maximum ($+$) allowable sizes in all but the largest sizes in $X_S$ (i.e. $Y_-$ and $Y_+$).
@@ -237,6 +311,93 @@ The best allowable sizes for $X_S$ can be found using the following steps:
 
 This procedure produces appropriate match of $X_S$ and $Q_S$ needed to satisfy the requirements of the minimal packing set, $S_{min}$.
 The effectiveness of the spanning integer algorithm is shown in the convergence of acceptable samples by iteration compared to a fixed size solution in Figure X.
+
+```{python}
+#| label: fig-convergence
+#| fig-cap: "Packing Algorithm Convergence"
+#insert figure
+# A random generator with a fixed seed for reproducibility
+rng = np.random.default_rng(1)
+
+tol = 1e-3
+
+gsd_list = []
+set_size_list = []
+flex_list = []
+
+# data_rows = []
+x = x1.copy()
+min_span = 5
+for start in range(0, len(x) - min_span):
+    for end in range(start + min_span, len(x)):
+        new_x = x[start:end]
+        n_sieves = len(new_x)
+
+        for j in range(10):
+            # Create a distributed set of retained masses
+            mass = mass_dist(n_sieves, rng, exponent=2, extra_randomness=7)
+
+            mass[-1] = 0.0  # Ensure last mass is zero
+            g = GSD(sizes=new_x, masses=mass)
+
+            # Create a flexible minimal packing for each GSD
+            mps_f = MinimalPackingGenerator(
+                g, x_n_factor=0.5, tol=tol, flex=True, density=1.0
+            )
+
+            # Create a set size minimal packing for each GSD
+            mps_s = MinimalPackingGenerator(
+                g, x_n_factor=0.5, tol=tol, flex=False, density=1.0
+            )
+            gsd_list.append(g)
+            set_size_list.append(mps_s)
+            flex_list.append(mps_f)
+    
+# Plot the grain size distributions
+fig, ax = plt.subplots()
+for gsd in gsd_list:
+    ax.plot(gsd.sizes[1:], 100*gsd.percent_passing[1:], color='k', alpha=0.2)
+ax.set_xscale('log')
+ax.grid()#(True, which='both', axis='both')
+ax.set_xlabel('Particle Size (mm)')
+ax.set_ylabel(r'Percent Passing (\%)')
+ax.set_ylim(0, 100)
+ax.set_xlim(0.055, 100)
+```
+
+```{python}
+fig, ax1 = plt.subplots()
+j = 1
+nf = []
+ns = []
+for i in range(len(flex_list)):
+    f = flex_list[i]
+    s = set_size_list[i]
+    xf = [n[-1] for n in f.qs]
+    xs = [n[-1] for n in s.qs]
+    nf.append(xf[-1])
+    ns.append(xs[-1])
+    ax1.plot(xf,f.error, color='k', alpha=0.8)
+    ax1.plot(xs,s.error,color="r", alpha=0.1)
+    
+ax1.set_ylim(0, 1e-1)
+# ax1.set_xlim(1e0, 25)
+ax1.set_xscale("log")
+# ax1.set_title("Packing Set Convergence")
+ax1.set_xlabel(r"Iterations (and q$_{nS}$)")
+ax1.set_ylabel("Packing Set Error")
+
+from matplotlib.lines import Line2D
+
+custom_lines = [
+    Line2D([0], [0], color="red", lw=2, label="Fixed Size"),
+    Line2D([0], [0], color="black", lw=2, label="Spanning Integer"),
+]
+
+# fig, ax = plt.subplots()
+# lines = ax.plot(data)
+ax1.legend(title="MPS Algorithm", handles=custom_lines, loc='upper right')
+```
 
 Note that this solution for the minimal packing set is dependent on the selected value for $x_{n,S}$.
 Because the maximum particle size, $x_{n,S}$ controls the packing set, and a smaller value for $x_{n,S}$ will tend to minimize the set, if the full range of possible $x_{n,S}$ is considered, $x_{n,S}$ and $x_{n-1,S}$ will tend to converge.
@@ -249,15 +410,134 @@ In general terms, the first is a function of the ratio of the largest to smalles
 The second is a function of the curvature of the sample.
 
 ```{python}
-#| label: fig-convergence
-#| fig-cap: "Packing Algorithm Convergence"
-#insert figure
+# Set up data structure to store GSDs and MPSs
+def add_data_row(data_rows, mpgen: MinimalPackingGenerator):
+    """
+    Adds a row to the DataFrame with the provided keyword arguments.
+    Any missing columns will be filled with NaN.
+
+    """
+    sample = mpgen.mps
+    total_particles = sum(sample.quantities)
+    mass_max = sample.total_masses[-1]
+    mass_mid = sample.total_masses[len(sample.total_masses) // 2]
+    mass_min = sample.total_masses[0]
+    mass_ratio = mass_min / mass_max
+    percent_fines = mass_min / sum(sample.total_masses)
+
+    size_max = sample.sizes[-1]
+    size_min = sample.sizes[0]
+    size_ratio = int(np.round(size_max / size_min, 0))
+
+    row = {
+        "GSD": mpgen.g,
+        "n_sieves": len(sample.sizes),
+        "mass_ratio": mass_ratio,
+        "size_ratio": size_ratio,
+        "vol_ratio": size_ratio**3,
+        "percent_fines": percent_fines,
+        "total_particles": total_particles,
+        "d_10": mpgen.g.d_10,
+        "d_30": mpgen.g.d_30,
+        "d_60": mpgen.g.d_60,
+        "cc": np.round(mpgen.g.cc, 3),
+        "cu": np.round(mpgen.g.cu, 3),
+        "gs_index": mpgen.g.gs_index,
+        "curvature_index": mpgen.g.curvature_index,
+        "log_size": mpgen.g._i_gs_curve()[0],
+        "gsd_curve": mpgen.g._i_gs_curve()[1],
+        "slope": mpgen.g.slope,
+        "curvature": np.mean(mpgen.g.curvature),  # + size_ratio**3,
+        # Best so far:
+        "shape_factor": np.log10(
+            size_ratio**3 * (1 + np.mean(mpgen.g.curvature))
+        ),  # * np.log10(size_ratio)**2),
+        "asdf": mass_ratio * size_ratio**3,
+        "group_symbol": mpgen.g.uscs_symbol,
+        "group_name": mpgen.g.uscs_name,
+    }
+    data_rows.append(row)
+    pass
+  
+# Populate dataset
+rng = np.random.default_rng(1)
+data_rows = []
+x = x1
+min_span = 5
+for start in range(0, len(x) - min_span):
+    for end in range(start + min_span, len(x)):
+        new_x = x[start:end]
+        n_sieves = len(new_x)
+
+        for j in range(50):
+            # Create a distributed set of retained masses
+            mass = mass_dist(n_sieves, rng, exponent=2, extra_randomness=7)
+
+            mass[-1] = 0.0  # Ensure last mass is zero
+            g = GSD(sizes=new_x, masses=mass)
+
+            # Create a flexible minimal packing for each GSD
+            mps = MinimalPackingGenerator(
+                g, x_n_factor=0.5, tol=tol, flex=True, density=1.0
+            )
+            add_data_row(data_rows, mps)
+            
+# Convert the list of dictionaries to a DataFrame
+df = pd.DataFrame(data_rows)
 ```
 
 ```{python}
 #| label: fig-gsd_shapes
 #| fig-cap: "Grain-size distribution curves"
 # insert figure
+# c = q_ns, s = q_ns, cmap = "viridis"
+fig, ax = plt.subplots()
+
+color_param = "curvature_index"
+color_index = df.columns.get_loc(color_param) + 1
+
+# Get the colormap
+cmap = plt.cm.viridis
+
+# Normalize the i_gs values to [0, 1] range for the colormap
+c_values = [row[color_index] for row in df.itertuples()]
+c_min = min(c_values)
+c_max = max(c_values)
+
+n_sieves = [13]
+
+for row in df.itertuples():
+    x_data = row.GSD.sizes[1:]
+    y_data = 100 * row.GSD.percent_passing[1:]
+
+    # Normalize i_gs to [0, 1] range
+    normalized_i_gs = (row[color_index] - c_min) / (c_max - c_min)
+
+    # Get color from colormap
+    color = cmap(normalized_i_gs)
+    if row.n_sieves in n_sieves:
+        ax.plot(x_data, y_data, color=color, alpha=1)
+
+ax.plot(
+    [0.075, 66, 66, 0.075, 0.075],
+    [0, 0, 100, 9.5, 0],
+    color="k",
+    linestyle="--",
+    linewidth=1,
+    label="Uniform Distribution",
+)
+
+# Add colorbar
+sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=c_min, vmax=c_max))
+sm.set_array([])
+colorbar = plt.colorbar(sm, ax=ax)
+colorbar.set_label("Curvature Index")
+
+ax.set_xscale("log")
+ax.set_xlim(0.05, 100)
+ax.set_ylim(0, 100)
+ax.set_xlabel("Grain Size (mm)")
+ax.set_ylabel(r"Percent Passing (\%)")
 ```
 
 ## Implications for DEM modeling
@@ -273,17 +553,115 @@ Find a rigorous solution minimal packing.
 #| label: fig-phi_N
 #| fig-cap: "Change in total number of MPS Particles with mass ratio."
 
+color_param = "vol_ratio"
+x_param = "mass_ratio"  # "curvature_index"
+y_param = "total_particles"
+
+fig, ax = plt.subplots()
+ax.scatter(
+    df[x_param],
+    df[y_param],
+    c=np.log10(df[color_param]),
+    s=10,
+    cmap="viridis",
+    alpha=1,
+)
+
+# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
+colorbar = plt.colorbar(ax.collections[0], ax=ax)
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($\Xi_1$)")
+
+ax.set_xlabel(r"Mass Ratio ($\Phi_1$)")
+ax.set_ylabel("Total Particles in Packing Set")
+ax.set_xscale("log")
+ax.set_yscale("log")
+
 ```
 
 ```{python}
 #| label: fig-curvature_N
 #| fig-cap: "Change in total number of MPS Particles with curvature index."
 
+color_param = "vol_ratio"
+x_param = "curvature_index"
+y_param = "total_particles"
+
+fig, ax = plt.subplots()
+ax.scatter(
+    df[x_param],
+    df[y_param],
+    c=np.log10(df[color_param]),
+    s=10,
+    cmap="viridis",
+    alpha=1,
+)
+
+# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
+colorbar = plt.colorbar(ax.collections[0], ax=ax)
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($\Xi_1$)")
+
+ax.set_xlabel("Curvature Index")
+ax.set_ylabel("Total Particles in Packing Set")
+# ax.set_xscale("log")
+ax.set_yscale("log")
+
 ```
 
 ```{python}
 #| label: fig-uscs_N
 #| fig-cap: "USCS classifications of the MPS data."
+
+fig, ax = plt.subplots(figsize=(6,5),layout="constrained")
+
+x_param = "gs_index"
+y_param = "total_particles"
+group_param = "group_name"
+# df_plot = df[df[group_param].str.contains("")]
+
+categories = ["graded gravel", "graded sand", "silty"]
+markers = ["1", ".", "."]
+
+for j, cat in enumerate(categories):
+    df_plot = df[df[group_param].str.contains(cat)]
+
+    
+    if cat == "silty":
+        palette = ["#77B3C9", "#F2A900"]
+    else:
+        palette = sns.color_palette()  # "Set2", len(df_plot[group_param].unique()))
+
+    for i, (label, group) in enumerate(df_plot.groupby(group_param)):
+        # if "graded gravel" in label:
+        #     marker = "|"
+        # else:
+        #     marker = "_"
+        ax.scatter(
+            group[x_param],
+            group[y_param],
+            label=f"{label}",
+            marker=markers[j],
+            color=palette[i],
+            # alpha=0.75,
+            s=40,  # Scale point size by log_total_particles
+        )
+
+
+fig.legend(
+    loc="outside upper center",
+    fontsize="small",
+    ncols=2,
+    frameon=False,
+    handlelength=2,
+)
+
+ax.set_xlabel("Grain Size Index")
+ax.set_ylabel("Total Particles in Packing Set")
+ax.set_ylim(1e0,2e10)
+ax.set_xlim(0.0, 0.7)
+# ax.set_xlim(1e-2, 1e2)
+# ax.set_xscale("log")
+ax.set_yscale("log")
+ax.grid(True, which='both', axis='both')
 
 ```
 
