@@ -1,9 +1,13 @@
 ---
-title: Minimal Packing Sets
+title: Minimal discrete matches for target grain size distributions
+execute:
+  echo: false
 format:
   html:
     code-fold: true
-    code-summary: "Show the code"
+  docx:
+    toc: true
+    number-sections: true
 author:
   - name: Lorne Arnold
     orcid: 0000-0002-6993-1642
@@ -94,49 +98,6 @@ plt.rcParams.update(
 
 ```
 
-```{python}
-
-# Standard U.S. sieve sizes (mm)
-x1 = np.array(
-    [
-        0.0001,  # Pan
-        0.075,  # Number 200 sieve separates coarse from fines
-        0.15,
-        0.3,
-        0.6,
-        1.18,
-        2.36,
-        4.75,  # Number 4 sieve separates sand from gravel
-        9.5,
-        19,
-        25,
-        37.5,
-        50,
-        63,
-        75,  # 3-inch sieve (100% passing this per ASTM D2487-17 1.2)
-
-    ]
-)
-
-sieve_sizes = x1.copy()
-n_sieves = len(sieve_sizes)
-
-# Generate random grain size distributions on the sieve set
-def mass_dist(n_sieves, rng=None, exponent=4.0, extra_randomness = 0):
-    if rng is None:
-        rng = np.random.default_rng()
-    base_dist = 1*np.ones(n_sieves)  + rng.random(n_sieves)
-    lower = 1 + n_sieves // 4
-    upper = 1 + 3 * n_sieves // 4
-    center_idx = rng.integers(lower, upper)
-    distances = np.abs(np.arange(n_sieves) - center_idx) / center_idx
-    scale_factor = np.exp(-exponent * distances)
-    dist = base_dist * scale_factor
-    for i in range(extra_randomness):
-        dist *= 1 + rng.random(n_sieves)   # Add some extra randomness
-    return dist
-```
-
 Soil is a fundamentally discrete granular material whose complex mechanical behavior emerges from the numerous interactions between its constituent parts.
 The discrete element method (DEM), introduced by @cundall1979, has proven to be a powerful tool in exploring the inter-particle interactions of granular assemblies.
 With DEM, a vast parametric space exists where grain sizes, shapes, contact models, etc. can be systematically varied and their influences on macro-scale assembly behavior can be quantified.
@@ -163,7 +124,7 @@ Samples with larger maximum particle sizes will have larger RVEs.
 Depending on the GSD, loading conditions, and behavior of interest, the minimum particle size expected to participate mechanically in the soil matrix may be substantially smaller than the largest particle size.
 Intuitively then, with increasing GSD breadth, the number of particles needed in a DEM simulation of granular assemblies will also increase.
 The ratio of minimum and maximum particle sizes is, therefore, a significant and often reported parameter in describing DEM models.
-Often, matching the true GSD of interest (e.g., from a physical soil sample) is sacrificed for computational efficiency, for example by upscaling the target GSD (Zeraati-Shamsabadi & Sadrekarimi, 2025).
+Often, matching the true GSD of interest (e.g., from a physical soil sample) is sacrificed for computational efficiency, for example by upscaling the target GSD [@zeraati-shamsabadi2025].
 
 While the insights we gain from DEM simulations with upscaled or truncated GSDs are valuable, there are acknowledged limitations imposed during scaling.
 Several questions around the limitations of DEM scaling are addressed by individual studies.
@@ -175,20 +136,16 @@ A brute force approach to answering this question certainly exists: build an uns
 The obvious disadvantage of this approach is that finding the answer may be computationally expensive itself.
 A preferred approach would be an analytical solution that provides the number of particles of various grain sizes needed to reproduce any given GSD.
 
-This paper introduces such an approach through the minimal packing set (MPS) concept.
+This paper introduces such an approach through the minimal discrete match (MDM) concept.
 The minimal packing set is the smallest set of discrete particles needed to match a given grain size distribution by volume.
-In order to characterize the MPS, discrete mathematical descriptions of grain size distributions and granular samples are presented as sets and the rules describing several relationships between the sets are defined.
-Using these definitions, a simple algorithm is shown to efficiently identify the MPS.
-The results show a broad range of MPS magnitudes over several GSDs of interest in geotechnical engineering.
-The MPS algorithm is implemented in an open-source Python module, available on GitHub.
-
-What is a grain-size distribution?
-How can it be described mathematically?
-How precise does a GSD need to be and how would one even measure that?
+In order to characterize the MDM, descriptions of grain size distributions and granular samples are presented as mathematical sets and the rules describing several relationships between the sets are defined.
+Using these definitions, a simple algorithm is shown to efficiently identify the MDM.
+The results show a broad range of MDM magnitudes over several GSDs of interest in geotechnical engineering.
+The MDM algorithm is implemented in an open-source Python module, available on GitHub.
 
 ## Discrete definitions
 
-Identifying the mimimal packing set requires rigorous mathematical definitions for particulate samples, $S$, and grain size distributions, $G$.
+Identifying the mimimal discrete match requires rigorous mathematical definitions for particulate samples, $S$, and grain size distributions, $G$.
 Conceptually, each of these are collections of items (i.e., sets) with specific restrictions.
 
 ### Sample definition
@@ -211,7 +168,7 @@ $$ {#eq-domains_sample}
 
 ### Grain size distribution definition
 
-The grain size distribution, $G$, has a similar structure.
+A grain size distribution, $G$, has a similar structure.
 It is and indexed set describing size boundaries, $X_G$, and masses, $M_G$.
 Like $X_S$, $X_G$ is an ordered set of unique values, however, it's domain also includes zero (representing the pan in a typical sieve analysis).
 Like $Q_S$, $M_G$ shares an index ($I_G$) with the size set, but it's domain is not restricted to integers, only to non-negative real numbers.
@@ -233,8 +190,7 @@ $$ {#eq-domains_gsd}
 
 ### Comparison definition
 
-The relationship between $S$ and $G$ needs to quantify the match between the two in several respects.
-These are presented here with $G$ being used to *describe* $S$.
+The relationship between $S$ and $G$ cad be defined in terms of how $G$ *describes* $S$.
 In the context of DEM modeling, this may seem backward because typically in DEM modeling, a target GSD is defined first and a sample generated to match it.
 On the other hand, a discrete sample (either physical or numerical) exists on its own, whereas a GSD only has meaning when interpreted as a description of a sample.
 Therefore the relationship between $S$ and $G$ will be defined in terms of $G$'s description of $S$.
@@ -245,87 +201,126 @@ The relationship between $S$ and $G$ is formalized in three conditions described
 **Condition 1:** $G$ is complete if and only if the final entry in $M_G$ is zero: $$G \text{ is complete } \Leftrightarrow m_{n_G} = 0$$ {#eq-gsd_complete}
 
 This condition ensures that $x_{nG}$ provides an upper bound to the sizes described by $G$.
+This is analogous to the limitation of scope in ASTM D6913 to grain sizes passing a 75-mm sieve [@d18committee].
 
-**Condition 2:** $G$ describes $S$ (denoted $G \longrightarrow S$) if and only if Condition 1 is met and the its smallest size is smaller than any size in $S$ and its largest size is larger than any size in $S$:
+**Condition 2:** $G$ describes $S$ (denoted $G \longrightarrow S$) if and only if $\text{Cond1}$ is met and the its smallest size is smaller than any size in $S$ and its largest size is larger than any size in $S$:
 
 $$
 G \longrightarrow S \Leftrightarrow \text{ Cond1} \land \min(X_G) < \min(X_S) \land \max(X_G) \ge \max(X_S)
 $$ {#eq-gds_describes}
 
-**Condition 3:** $G$ describes $S$ accurately if Condition 2 is met and the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$: $$
-G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \text{ Cond2} \land \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j$$ {#eq-gsd_accurate} where $f(x)$ is a scaling function that converts size to mass.
-As indicated in the equation below, "between" assumes (something about whether equal means retained or not).
-
-**Condition 4:** $G$ describes $S$ articulately if Condition 2 is met and for all consecutive pairs of sizes in $X_S$ there exists at least one size in $X_G$ between them.
+**Condition 3:** $G$ describes $S$ articulately if $\text{Cond2}$ is met and for all consecutive pairs of sizes in $X_S$ there exists at least one size in $X_G$ between them.
 
 $$
 G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \text{ Cond2} \land \forall (x_i, x_{i+1}) \in X_S \space \exists \space (x_i < x_j \in X_G \le x_{i+1})
 $$ {#eq-gsd_articulate}
 
+**Condition 4:** $G$ describes $S$ accurately if $\text{Cond2}$ is met and the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$:
+
+$$
+G \stackrel{\text{accurately}}{\longrightarrow} S \Leftrightarrow \text{ Cond2} \land \sum_{\substack{i \in I_S \\ x_j < x_i \le x_{j+1}}} q_i \cdot f(x_i) = m_j
+$$ {#eq-gsd_accurate}
+
+where $f(x)$ is a scaling function that converts size to mass.
+As indicated in @eq-gsd_accurate, a size in $X_S$ is considered between two sizes in $X_G$ if it is larger than the $x_j$ and smaller than or equal to $x_{j+1}$.
+This is physically analogous to assuming a particle will pass through an opening equal to its own size.
+
+Note that $\text{Cond3}$ is not required for $\text{Cond4}$ to be satisfied.
+@eq-domains_gsd
+
 ### Physical interpretation
 
 In physical terms, some assumptions are required in order for $S$ and $G$ to be interpreted as a physical sample and sieve analysis (or a numerical version of the same).
-First, the sizes in $X_S$ and $X_G$ should be one-dimensional since sieve analysis is based on particle diameter.
-Next, the scaling function, $f(x)$ (with $x$ being diameter) should be defined.
-For spherical particles with of uniform density ($\rho$), this is a straightforward definition:
+First, the sizes in $X_G$ are assumed to represent smallest enclosing diameter of whatever shapes the particles in $S$ are.
+Second, the particles in $S$ are assumed to be of the same shape such that a single scaling function, $f(x)$, can represent the size-mass relationship for all of $S$.
+For spherical particles with of constant density ($\rho$), this is a straightforward definition:
 
 $$f(x) = \frac{\rho\pi}{6}x^3$$
 
 Note, however, that the use of this particular scaling function is not required in general.
 It is only necessary that $f(x)$ be some mapping of $x \mapsto  m$.
+It would be possible to combine sets of differently shaped particles with respective mapping functions, but this paper will limit itself to assuming uniform, spherical particles.
 
-## Solving for the minimal packing set
+## Grain size distributions considered
 
-For any given $S$, finding $G$ that accurately describes $S$ is no more complicated that following the grain size analysis procedure described in ASTM D6913 [@d18committee].
-The reverse, finding a solution for $S$ that is accurately described by some target $G$, is non-trivial.
-One of the reasons is that unlike a grain size analysis, the sizes of the solution ($X_S$) are bounded, but not explicitly defined.
-Additionally, the goal for this procedure is not only to find any $S$ that is accurately described by $G$, but the minimal packing set $S_{min}$ that is accurately described by $G$.
+This paper will analyze several grain size distributions in the range of interest in geotechnical engineering (although the methods are applicable over a wider range).
+Specifically, randomized GSDs based on normal distributions across the sieve set specified in ASTM D6913 (14 opening sizes from 0.075-mm to 75-mm).
+@tbl-gsd_params summarizes the GSDs used in this study using several traditional characteristics including coefficient of curvature, $C_c$, and coefficient of uniformity, $C_u$.
+The grain size index, $I_{GS}$, as defined by @erguler2016 and a new parameter, the curvature index, $I_C$, are also presented.
+The curvature index is conceptually similar to the grain size index in that it is a ratio of areas related to the cumulative distribution function (in percent passing, log size space) of the GSD.
+$I_C$ normalizes the area under the GSD curve to the trapezoidal area bounded by the percent passing the smallest size above the pan ($x_{min+1}$) and the largest size ($x_{max}$).
+@fig-gsd_curvature_index shows a small subset of the GSDs considered and illustrates the definition of $I_C$ on an example GSD.
 
-As a starting point, assuming that $G$ is an articulate description of $S$ and selecting any valid values for $X_S$, an indexed set of mass ratios, $\Phi$, and size ratios, $\Xi$ can be defined:
+Some traditional grain size distribution characteristics
 
-$$\Phi = \{\frac{m_j}{m_{n_G-1}} : j \in I_G\} \text{; with elements } \phi_i$$
+::: {#tbl-gsd_params}
+| Parameter           | Value(s) in study |
+|---------------------|-------------------|
+| $x_{min+1}$         | 0.075 to 25 mm    |
+| $x_{max}$           | 9.5 to 75 mm      |
+| \# of sieves        | 5 to 14           |
+| \# of $G$ instances | 2750              |
+| $C_c$               | 0.2 to 25.5       |
+| $C_u$               | 1.2 to 214.5      |
+| $I_{GS}$            | 0.03 to 0.60      |
+| $I_C$               | 0.29 to 1.57      |
 
-$$\Xi = \{\frac{f(x_i)}{f(x_{n_S})} : i \in I_S\} \text{; with elements } \xi_i$$
-
-The ratio $\Phi$ describes the masses in $G$ relative the the mass of the largest size retaining mass in $G$.
-The ratio $\Xi$ describes the mass (through the scaling function $f(x)$) of each particle size to that of the largest particle size in $S$.
-Since $\Phi$ describes relative masses of each size and $\Xi$ describes the relative mass per particle of each size, the relative number of particles of each size $\Upsilon$ for any $S$ described by $G$ can be defined by the quotient of each entry in $\Phi$ and $\Xi$:
-
-$$\Upsilon = \{\frac{\phi_j}{\xi_{n_S}} : i \in I_S\} \text{; with elements } \upsilon_i$$
-
-The ratio $\Upsilon$ is directly proportional to the key target parameter, $Q$, describing the quantities of each particle size in $S$.
-Unfortunately, with the exception of $\upsilon_{nS}$, the entries in $\Upsilon$ are not guaranteed to be integers, which is a requirement for $Q$.
-Multiples of $\Upsilon$ can be used to find its smallest possible integer representation.
-If some level of tolerable error can be specified, each successive iteration of multiples of $Y$ can be mapped to its closest integer representation and compared to the target $G$ to assess its error (i.e., how far $\text{Cond3}$ is from being satisfied).
-If the initial assumed sizes are held constant, this iterative approach will find the minimum set that meets a given error tolerance for the selected sizes.
-
-But since the sizes in $X_S$ are only bounded by $X_G$ and not explicitly defined, the opportunity exists to find a better selection of entries in $X_S$ that will minimize $Q_S$.
-This approach is equivalent to dropping the articulate description ($\text{Cond3}$) requirement from the initial attempt.
-The best allowable sizes for $X_S$ can be found using the following steps:
-
-1)  Find the quantity ratios associated with the minimum ($-$) and maximum ($+$) allowable sizes in all but the largest sizes in $X_S$ (i.e. $Y_-$ and $Y_+$).
-2)  Check whether an integer is contained between each entry in $Y_-$ and $Y_+$.
-3)  If not, iteratively increase $Y_-$ and $Y_+$ until the span between each entry contains an integer.
-4)  When an integer quantity exists between each entry in $Y_-$ and $Y_+$, populate $Q_S$ with these integers.
-5)  Invert the mass scaling function $f(x)$ on the ratio $\Phi$ / $Q_S$ to identify the sizes in $X_S$.
-
-This procedure produces appropriate match of $X_S$ and $Q_S$ needed to satisfy the requirements of the minimal packing set, $S_{min}$.
-The effectiveness of the spanning integer algorithm is shown in the convergence of acceptable samples by iteration compared to a fixed size solution in Figure X.
+Grain size distribution parameters in this study
+:::
 
 ```{python}
-#| label: fig-convergence
-#| fig-cap: "Packing Algorithm Convergence"
-#insert figure
-# A random generator with a fixed seed for reproducibility
+# Setup for generating example grain size distributions
+
+## Standard U.S. sieve sizes (mm)
+x1 = np.array(
+    [
+        0.0001,  # Pan
+        0.075,  # Number 200 sieve separates coarse from fines
+        0.15,
+        0.3,
+        0.6,
+        1.18,
+        2.36,
+        4.75,  # Number 4 sieve separates sand from gravel
+        9.5,
+        19,
+        25,
+        37.5,
+        50,
+        63,
+        75,  # 3-inch sieve (100% passing this per ASTM D2487-17 1.2)
+
+    ]
+)
+
+sieve_sizes = x1.copy()
+n_sieves = len(sieve_sizes)
+
+## Generate random grain size distributions on the sieve set
+def mass_dist(n_sieves, rng=None, exponent=4.0, extra_randomness = 0):
+    if rng is None:
+        rng = np.random.default_rng()
+    base_dist = 1*np.ones(n_sieves)  + rng.random(n_sieves)
+    lower = 1 + n_sieves // 4
+    upper = 1 + 3 * n_sieves // 4
+    center_idx = rng.integers(lower, upper)
+    distances = np.abs(np.arange(n_sieves) - center_idx) / center_idx
+    scale_factor = np.exp(-exponent * distances)
+    dist = base_dist * scale_factor
+    for i in range(extra_randomness):
+        dist *= 1 + rng.random(n_sieves)   # Add some extra randomness
+    return dist
+  
+## A random generator with a fixed seed for reproducibility
 rng = np.random.default_rng(1)
 
-tol = 1e-3
+tol = 1e-2
 
 gsd_list = []
 set_size_list = []
 flex_list = []
 
-# data_rows = []
+## Generate a small batch of GSDs
 x = x1.copy()
 min_span = 5
 for start in range(0, len(x) - min_span):
@@ -352,11 +347,98 @@ for start in range(0, len(x) - min_span):
             gsd_list.append(g)
             set_size_list.append(mps_s)
             flex_list.append(mps_f)
+```
+
+```{python}
+#| label: fig-gsd_curvature_index
+#| fig-cap: "Grain size distributions evaluated. The area ratio defining the curvature index is shown. The example curve has a curvature index of 1.09."
+
     
-# Plot the grain size distributions
+# grain size distribution plot
+# plt.close('all')
 fig, ax = plt.subplots()
 for gsd in gsd_list:
-    ax.plot(gsd.sizes[1:], 100*gsd.percent_passing[1:], color='k', alpha=0.2)
+    ax.plot(gsd.sizes[1:], 100*gsd.percent_passing[1:], color='k', alpha=0.2, linewidth=0.5)
+
+ex_i = 39
+example_gsd = gsd_list[ex_i]
+ax.plot(example_gsd.sizes[1:], 100*example_gsd.percent_passing[1:], color='r', linewidth=2, label='Example GSD')
+ax.plot(
+    [
+        example_gsd.sizes[1],
+        example_gsd.sizes[1],
+        example_gsd.sizes[-1],
+        example_gsd.sizes[-1],
+    ],
+    [
+        100 * example_gsd.percent_passing[1],
+        0.5,
+        0.5,
+        100 * example_gsd.percent_passing[-1],
+    ],
+    color="r",
+    linewidth=2,
+    label="Example Retained",
+)
+
+ax.plot(
+    [
+        0.075,
+        example_gsd.sizes[-1],
+        example_gsd.sizes[-1],
+        0.075,
+        0.075,
+        example_gsd.sizes[-1],
+    ],
+    [0.5, 0.5, 100, 100 * example_gsd.percent_passing[1], 0, 0],
+    color="b",
+    linestyle=":",
+    linewidth=2,
+    label="Uniform Distribution",
+)
+
+ax.plot([11,40], [52,52], color='k', linewidth=1,zorder=4)
+left, bottom, width, height = (5.5, 40, 80, 30)
+rect = plt.Rectangle((left, bottom), width, height, fill=True, color="1", alpha=0.8,zorder=3)
+
+arrowprops = dict(arrowstyle="->", color="k", lw=1)
+bbox = dict(fc="1", ec="1", alpha=0.9)
+
+
+ax.add_patch(rect)
+ax.annotate(
+    r"\textbf{Curvature Index:}",
+    xy=(5, 65),
+    xytext=(6.5, 65),
+    fontsize=11,
+    # bbox=bbox,
+    color="k",
+    ha="left",
+    va="center",
+)
+bbox = dict(fc="1", ec="r", linewidth=2, alpha=1)
+ax.annotate(
+    r"Area",
+    xy=(5, 65),
+    xytext=(20, 58),
+    fontsize=11,
+    bbox=bbox,
+    color="k",
+    ha="center",
+    va="center",
+)
+bbox = dict(fc="1", ec="b", linestyle=":", linewidth=2, alpha=1)
+ax.annotate(
+    r"Area",
+    xy=(5, 65),
+    xytext=(20, 46),
+    fontsize=11,
+    bbox=bbox,
+    color="k",
+    ha="center",
+    va="center",
+)
+
 ax.set_xscale('log')
 ax.grid()#(True, which='both', axis='both')
 ax.set_xlabel('Particle Size (mm)')
@@ -365,33 +447,191 @@ ax.set_ylim(0, 100)
 ax.set_xlim(0.055, 100)
 ```
 
+## Solving for the minimal discrete match
+
+For any given $S$, finding $G$ that accurately describes $S$ is no more complicated that following the grain size analysis procedure described in ASTM D6913 [@d18committee].
+The reverse, finding a solution for $S$ that is accurately described by some target $G$, is non-trivial.
+One of the reasons is that unlike a grain size analysis, the sizes of the solution ($X_S$) are bounded, but not explicitly defined.
+Additionally, the goal for this procedure is not only to find any $S$ that is accurately described by $G$, but the minimal packing set $S_{min}$ that is accurately described by $G$.
+
+As a starting point, assuming that $G$ is an articulate description of $S$ and selecting any valid values for $X_S$, an indexed set of mass ratios, $\Phi$, and volume ratios, $Z$ can be defined:
+
+$$\Phi = \left\{\frac{m_j}{m_{n_G-1}} : j \in I_G\right\} \text{; with elements } \phi_j$$
+
+$$Z= \left\{\frac{f(x_i)}{f(x_{n_S})} : i \in I_S\right\} \text{; with elements } \zeta_i$$
+
+The mass ratio $\Phi$ describes the masses in $M_G$ relative the the mass of the largest size retaining mass.
+Consequently, $\phi_{nG-1}$ will always equal 1.
+The volume ratio $Z$ describes the relative volume of each particle size to that of the largest particle size in $S$.
+Consequently, $\zeta_{nS}$ will always equal 1.
+Note that $Z$ is referred to as a volume ratio to avoid convusion with $\Phi$ despite the fact that the mapping function $f(x)$ converts size to mass.
+Interpreting $Z$ as a volume ratio is valid under a constant density assumption.
+
+Since $\Phi$ describes relative masses of each size and $Z$ describes the relative volume (and mass) per particle of each size, a quantity ratio, $K$, can be defined by the ratio of $\Phi$ to $Z$.
+
+$$K= \left\{\frac{\phi_i}{\zeta_{n_S}} : i \in I_S\right\} \text{; with elements } \kappa_i$$
+
+The quantity ratio $K$ is the relative number of particles of each size for any $S$ accurately described by $G$.
+It is directly proportional to the key target parameter, $Q$.
+Unfortunately, with the exception of $\kappa_{nS}$, the entries in $K$ are not guaranteed to be integers, which is a requirement for $Q$.
+Rounding each element in $K$ to the nearest integer provides an approximate solution for the minimal discrete match.
+
+$$
+S_{approx} = \{(X, \text{int}(K)) \in I_S \approxeq S_{min}\}
+$$
+
+Checking $\text{Cond4}$ against $S_{approx}$ and $G$ shows how much error there is in the approximate solution.
+Depending on the application and acceptable error tolerance, $S_{approx}$ may be a suitable substitute for $S_{min}$.
+If a closer fit is needed, iteratively multiplying $K$ by integers greater than 1 can be used to reduce the error to tolerable levels.
+
+But since the sizes in $X_S$ are only bounded by $X_G$ and not explicitly defined, the opportunity exists to find a better selection of entries in $X_S$ that will minimize $Q_S$.
+This approach is equivalent to dropping the articulate description ($\text{Cond3}$) requirement from the initial attempt.
+
+The best allowable sizes for $X_S$ can be found using the following steps:
+
+1)  Find the quantity ratios associated with the minimum ($-$) and maximum ($+$) allowable sizes in all but the largest size in $X_S$ (i.e. $K_-$ and $K_+$).
+2)  Check whether an integer is contained between each entry in $K_-$ and $K_+$.
+3)  If not, iteratively increase $K_-$ and $K_+$ until the span between each entry contains an integer.
+4)  When an integer quantity exists between each entry in $K_-$ and $K_+$, these integers can be used to populate the spanned integer quantity ratio, $K_{SI}$.
+5)  Invert the mass scaling function $f(x)$ on the ratio $\Phi$ / $K_{SI}$ to identify the compatible sizes for the spanned integer quantities: in $X_S$.
+
+$$
+X_{SI} = f^{-1} \left( \frac{\Phi}{K_{SI}} \right) 
+$$ {#eq-spanned_int_sizes}
+
+Because $K_{SI}$ was generated using the allowable sizes of $X$ and the mass ratios of the target $G$, the resulting $X_{SI}$ satisfies $\text{Cond4}$ with $K_{SI}$ as the smallest possible quantity of particles, or the minimal discrete match:
+
+$$
+S_{min} = \{X_{SI}, K_{SI}\}
+$$
+
+The effectiveness of the spanned integer algorithm is shown in the rapid convergence to numerical zero error compared to a fixed-size approximation in @fig-convergence. The figure shows both approaches attempting to find a suitable sample for each of the GSDs shown in @fig-gsd_curvature_index with an allowable error tolerance of 1 percent.
+In nearly all cases, the spanned integer approach requires no iteration.
+Where iteration is needed, it converges to numerical zero within one or two iterations.
+The fixed size approach converges with between 1 and 15 iterations and retains measurable error.
+
 ```{python}
-fig, ax1 = plt.subplots()
+
+```
+
+```{python}
+#| label: fig-convergence
+#| fig-cap: "Packing Algorithm Convergence"
+
+# Packing algorithm convergence plot
+fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, height_ratios=[4, 1])
+# fig, ax1 = plt.subplots()
 j = 1
 nf = []
 ns = []
+
+for i in range(len(set_size_list)):
+    # f = flex_list[i]
+    s = set_size_list[i]
+    # xf = [n[-1] for n in f.qs]
+    xs = [n[-1] - 1 for n in s.qs]
+    # f_error = f.error
+    s_error = s.error
+
+    # nf.append(xf[-1])
+    ns.append(xs[-1])
+    # ax1.plot(xf, f.error, color="k", alpha=1)
+    # ax2.plot(xf, f.error, color="k", alpha=0.5)
+    ax1.plot(xs, s.error, color="r", alpha=0.5)
+
 for i in range(len(flex_list)):
     f = flex_list[i]
-    s = set_size_list[i]
-    xf = [n[-1] for n in f.qs]
-    xs = [n[-1] for n in s.qs]
+    # s = set_size_list[i]
+    xf = [n[-1] - 1 for n in f.qs]
+    # xs = [n[-1] for n in s.qs]
+    f_error = f.error
+    # s_error = s.error
+
     nf.append(xf[-1])
-    ns.append(xs[-1])
-    ax1.plot(xf,f.error, color='k', alpha=0.8)
-    ax1.plot(xs,s.error,color="r", alpha=0.1)
-    
-ax1.set_ylim(0, 1e-1)
-# ax1.set_xlim(1e0, 25)
-ax1.set_xscale("log")
+    # ns.append(xs[-1])
+    ax1.plot(xf, f.error, color='k', alpha=0.5)
+    ax2.plot(xf, f.error, color="k", alpha=0.5)
+    ax2.scatter(xf, f.error, marker='o',color='k', alpha=0.5)
+    # ax1.plot(xs,s.error,color="r", alpha=1)
+
+
+ax1.plot([0, 200], [tol, tol], color='k', linestyle='--', linewidth=1)
+
+
+
+# # Calculate histograms
+# counts_ns, bins_ns = np.histogram(ns, bins=50)
+# counts_nf, bins_nf = np.histogram(nf, bins=bins_ns)
+
+# # Normalize to max frequency
+# norm_counts_ns = counts_ns / np.max(counts_ns)
+# norm_counts_nf = counts_nf / np.max(counts_nf)
+
+# # Plot normalized histograms
+# ax2.bar(
+#     bins_ns[:-1],
+#     norm_counts_ns,
+#     width=np.diff(bins_ns),
+#     alpha=1,
+#     label="Fixed Size",
+#     color="red",
+# )
+# ax2.bar(
+#     bins_nf[:-1],
+#     norm_counts_nf,
+#     width=np.diff(bins_nf),
+#     alpha=1,
+#     label="Spanning Integer",
+#     color="black",
+# )
+
+
+ax1.set_yscale("log")
+# ax1.set_xscale("log")
+ax1.set_ylim(1e-4, 5e-1)
+ax1.set_xlim(0, 16)
+# ax1.set_xscale("log")
 # ax1.set_title("Packing Set Convergence")
-ax1.set_xlabel(r"Iterations (and q$_{nS}$)")
+
+ax2.set_yscale("log")
+# ax1.set_xscale("log")
+ax2.set_ylim(5e-18, 5e-16)
+
+ax2.set_xlabel(r"Iterations (and q$_{nS}$)")
 ax1.set_ylabel("Packing Set Error")
+
+arrowprops = dict(arrowstyle="->", color="k", lw=1)
+bbox = dict(fc="1",ec="1")
+
+ax1.annotate(
+    r"$\epsilon_{tol}$",
+    xy=(10, tol),
+    xytext=(12, 1e-3),
+    fontsize=14,
+    arrowprops=arrowprops,
+    bbox=bbox,
+    color="k",
+    ha="left",
+    va="center",
+)
+
+ax2.annotate(
+    "If any iteration needed,\nSI converges to numeric zero quickly.",
+    xy=(2.5, 1e-16),
+    xytext=(3.5, 5e-17),
+    fontsize=12,
+    arrowprops=arrowprops,
+    bbox=bbox,
+    color="k",
+    ha="left",
+    va="center",
+)
 
 from matplotlib.lines import Line2D
 
 custom_lines = [
-    Line2D([0], [0], color="red", lw=2, label="Fixed Size"),
-    Line2D([0], [0], color="black", lw=2, label="Spanning Integer"),
+    Line2D([0], [0], color="red", lw=2, alpha=0.5, label="Fixed Size"),
+    Line2D([0], [0], color="black", lw=2, alpha=0.5, label="Spanning Integer"),
 ]
 
 # fig, ax = plt.subplots()
@@ -403,14 +643,29 @@ Note that this solution for the minimal packing set is dependent on the selected
 Because the maximum particle size, $x_{n,S}$ controls the packing set, and a smaller value for $x_{n,S}$ will tend to minimize the set, if the full range of possible $x_{n,S}$ is considered, $x_{n,S}$ and $x_{n-1,S}$ will tend to converge.
 The result of that convergence would be equivalent to the solution for a target $G$ with $x_{n-1,S} \approxeq x_{n,S} = x_{n-1,G}$ and the $x_{n-1,G}$ sieve removed.
 
-## Grain size effects on MPS
+## Characteristics of the MDM
 
-Regarding $||S_{mp}||$, it tends to be controlled by two factors: the maximum value in $Y$ and the value in the last entry in $Y$.
-In general terms, the first is a function of the ratio of the largest to smallest particles in the sample.
-The second is a function of the curvature of the sample.
+The MDM increases with increasing mass ratio.
+The most critical mass ratio is smallest size to largest size.
+
+The same is true of the volume ratio, which spans a larger range than volume ratio.
+This is an expected result.
+It was already mentioned that dmin/dmax is a commonly reported parameter for this reason.
+
+@fig-phi_N illustrates the relationship between MR and MDM size as well as vol ratio with color.
+
+While not unexpected, the dependence on mass and volume ratios can be quantified through the MDM concept.
+
+Slightly less intuitive is the relationship between curvature index and MDM size, which is also positive.
+
+@fig-curvature_N shows the relationship between I_C and MDM size.
+C_c, C_u, and I_GS were found to not correlate directly with MDM size.
+However, I_GS is helpful for visualizing the breadth of correlation between MDM size and uscs classifications.
+@fig-uscs_N shows the range of MDMs associated with the granular uscs classifications in this study.
 
 ```{python}
-# Set up data structure to store GSDs and MPSs
+# Create a larger dataset for plotting trends in MPS for a broad spectrum of GSDs
+## Set up data structure to store GSDs and MPSs
 def add_data_row(data_rows, mpgen: MinimalPackingGenerator):
     """
     Adds a row to the DataFrame with the provided keyword arguments.
@@ -459,8 +714,7 @@ def add_data_row(data_rows, mpgen: MinimalPackingGenerator):
     data_rows.append(row)
     pass
   
-# Populate dataset
-rng = np.random.default_rng(1)
+## Populate dataset
 data_rows = []
 x = x1
 min_span = 5
@@ -478,76 +732,13 @@ for start in range(0, len(x) - min_span):
 
             # Create a flexible minimal packing for each GSD
             mps = MinimalPackingGenerator(
-                g, x_n_factor=0.5, tol=tol, flex=True, density=1.0
+                g, x_n_factor=0.001, tol=tol, flex=True, density=1.0
             )
             add_data_row(data_rows, mps)
             
-# Convert the list of dictionaries to a DataFrame
+## Convert the list of dictionaries to a DataFrame
 df = pd.DataFrame(data_rows)
 ```
-
-```{python}
-#| label: fig-gsd_shapes
-#| fig-cap: "Grain-size distribution curves"
-# insert figure
-# c = q_ns, s = q_ns, cmap = "viridis"
-fig, ax = plt.subplots()
-
-color_param = "curvature_index"
-color_index = df.columns.get_loc(color_param) + 1
-
-# Get the colormap
-cmap = plt.cm.viridis
-
-# Normalize the i_gs values to [0, 1] range for the colormap
-c_values = [row[color_index] for row in df.itertuples()]
-c_min = min(c_values)
-c_max = max(c_values)
-
-n_sieves = [13]
-
-for row in df.itertuples():
-    x_data = row.GSD.sizes[1:]
-    y_data = 100 * row.GSD.percent_passing[1:]
-
-    # Normalize i_gs to [0, 1] range
-    normalized_i_gs = (row[color_index] - c_min) / (c_max - c_min)
-
-    # Get color from colormap
-    color = cmap(normalized_i_gs)
-    if row.n_sieves in n_sieves:
-        ax.plot(x_data, y_data, color=color, alpha=1)
-
-ax.plot(
-    [0.075, 66, 66, 0.075, 0.075],
-    [0, 0, 100, 9.5, 0],
-    color="k",
-    linestyle="--",
-    linewidth=1,
-    label="Uniform Distribution",
-)
-
-# Add colorbar
-sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=c_min, vmax=c_max))
-sm.set_array([])
-colorbar = plt.colorbar(sm, ax=ax)
-colorbar.set_label("Curvature Index")
-
-ax.set_xscale("log")
-ax.set_xlim(0.05, 100)
-ax.set_ylim(0, 100)
-ax.set_xlabel("Grain Size (mm)")
-ax.set_ylabel(r"Percent Passing (\%)")
-```
-
-## Implications for DEM modeling
-
-The algorithms described above can 1.
-Find a first-order approximation of the minimal packing.
-2.
-Quantify the error in approximate minimal packings.
-3.
-Find a rigorous solution minimal packing.
 
 ```{python}
 #| label: fig-phi_N
@@ -569,7 +760,7 @@ ax.scatter(
 
 # ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
 colorbar = plt.colorbar(ax.collections[0], ax=ax)
-colorbar.set_label(r"Log$_{10}$Volume Ratio ($\Xi_1$)")
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($Z_1$)")
 
 ax.set_xlabel(r"Mass Ratio ($\Phi_1$)")
 ax.set_ylabel("Total Particles in Packing Set")
@@ -598,7 +789,7 @@ ax.scatter(
 
 # ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
 colorbar = plt.colorbar(ax.collections[0], ax=ax)
-colorbar.set_label(r"Log$_{10}$Volume Ratio ($\Xi_1$)")
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($Z_1$)")
 
 ax.set_xlabel("Curvature Index")
 ax.set_ylabel("Total Particles in Packing Set")
@@ -664,6 +855,17 @@ ax.set_yscale("log")
 ax.grid(True, which='both', axis='both')
 
 ```
+
+## Implications for DEM modeling
+
+The algorithms described above can 1.
+Find a first-order approximation of the minimal packing.
+2.
+Quantify the error in approximate minimal packings.
+3.
+Find a rigorous solution minimal packing.
+
+## Conclusions
 
 The rigorous minimal packing may be significantly larger than the first-order approximation or some other packing set within some acceptable tolerance.
 Whether a rigorous or approximate solution is needed depends very much on the application.
