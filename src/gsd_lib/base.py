@@ -24,6 +24,7 @@ class IndexedSet:
 
         # Check for unique sizes
         if len(np.unique(sizes)) != len(sizes):
+            print(sizes)
             raise ValueError("All entries in sizes must be unique")
 
         # Get sorting indices and store them for child classes

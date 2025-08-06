@@ -10,7 +10,9 @@ class MinimalPackingGenerator:
 
     _ok_x_n_factor = (0.0, 1.0)
 
-    def __init__(self, gsd, x_n_factor=0.5, tol=1e-3, flex=False, density=1.0):
+    def __init__(
+        self, gsd, x_n_factor=0.5, tol=1e-3, flex=False, density=1.0, ref_pos=1.0
+    ):
         """
         Initialize MinimalPackingGenerator.
 
@@ -34,6 +36,9 @@ class MinimalPackingGenerator:
         self._iteration = 1
 
         self.card_s = len(self.g) - 1
+        self.ref_index = int(ref_pos * (self.card_s - 1))
+        if not (0 <= self.ref_index < self.card_s):
+            raise ValueError(f"ref_pos must be between 0 and {self.card_s - 1}")
         self.x_n_factor = x_n_factor
         self.x_plus = self._get_x_s(extreme=1)
         self.x_minus = self._get_x_s(extreme=0)
@@ -74,7 +79,7 @@ class MinimalPackingGenerator:
             )
 
         m = self.g.percent_retained[:-1]
-        m_ns = m[-1]
+        m_ns = m[self.ref_index]
         phi = m / m_ns  # TEST: phi[-1] should always be 1.0
         return phi
 
@@ -84,7 +89,7 @@ class MinimalPackingGenerator:
 
         """
         v = x**3
-        v_ns = v[-1]
+        v_ns = v[self.ref_index]
         zeta = v / v_ns  # TEST: zeta[-1] should always be 1.0
         return zeta
 
@@ -118,7 +123,7 @@ class MinimalPackingGenerator:
         Generate the best sizes for a test sample based on the integer quantities.
         """
         new_zeta = self.phi / (q_int / i)
-        best_sizes = new_zeta ** (1 / 3) * self.x_plus[-1]
+        best_sizes = new_zeta ** (1 / 3) * self.x_plus[self.ref_index]  # ***
         # if any of the sizes are less than x_minus or greater than x_plus, replace them with the bounds
         best_sizes = np.clip(best_sizes, self.x_minus, self.x_plus)
         return best_sizes
