@@ -74,3 +74,10 @@ class Sample(IndexedSet):
         Return the L-1 norm of the sample quantities, which is the total number of particles.
         """
         return np.sum(self.quantities)
+
+    @property
+    def total_volume(self):
+        """
+        Calculate the total volume of the sample based on particle sizes and quantities.
+        """
+        return np.sum(self.total_masses) / self.density

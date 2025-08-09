@@ -21,9 +21,8 @@ def is_sorted(lst):
 
 
 def sphere_vol(d):
-    """Calculate volume based on diameter (simplified for cubic relationship)."""
-    # Using d**3 instead of actual sphere volume for computational simplicity
-    return d**3  # 4 / 3 * np.pi * r**3
+    """Calculate volume based on diameter."""
+    return (np.pi / 6) * d**3
 
 
 def sphere_rad(v):
