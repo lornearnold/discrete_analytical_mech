@@ -43,7 +43,7 @@ A mapping of USCS classification and MDM reveals a broad distribution of computa
 
 ## Keywords
 
-Discrete soil description, analytical solutions, open-source algorithms, computational cost
+Discrete soil description, discrete element method, open-source algorithms, computational cost
 
 ## Introduction
 
@@ -134,18 +134,17 @@ It becomes an important experimental design consideration, then, to understand t
 For very specific GSDs, formulas can be used to calculate the number of particles needed.
 For example, @tyler1992 provide such a formula for self-similar fractal distributions.
 However, they note that the formula results are sensitive to the choice of representative radius for a given range.
-Further, they concluded that self-similar fractal distribution was a good model for pore structure, but not necessarily grain size.
-For general GSDs, particularly when a specific physical soil is being modeled, an ideal approach would be an analytical solution to the minimum number of particles required to reproduce the GSD.
+Further, they concluded that a self-similar fractal distribution is a good model for pore structure, but not necessarily grain size.
+For general GSDs, particularly when a real soil is being modeled, an ideal approach would involve an analytical solution to the minimum number of particles required to reproduce the GSD.
 
 This paper introduces such an approach through the minimal discrete match (MDM) concept.
-The minimal packing set is the smallest set of discrete particles needed to match a given grain size distribution by mass.
-Note that the MDM is based on mass-volume relationships only, not mechanical behavior.
+The MDM is the smallest set of discrete particles needed to match a given grain size distribution by mass.
+Note that the MDM is based on mass-size relationships only, not mechanical behavior.
 Therefore, it represents an important component to determining RV and relative computational cost, but it is not equivalent to an RV.
 
 In order to characterize the MDM, descriptions of grain size distributions and granular samples are presented as mathematical sets and the rules describing several relationships between the sets are defined.
-Using these definitions, algorithms are presented for both an approximate and a rigorous solution for the MDM.
-The results show a broad range of MDM magnitudes over several GSDs of interest in geotechnical engineering.
-The MDM algorithms are implemented in an open-source Python module, available on GitHub.
+Using these definitions, algorithms are presented for both an approximate and a rigorous solution for the MDM, which can be projected to calculate sample-scale particle quantities.
+The method is compared to published DEM models and shows a broad range of MDM magnitudes over several GSDs of interest in geotechnical engineering.
 
 ## Discrete definitions
 
@@ -196,9 +195,6 @@ $$ {#eq-domains_gsd}
 ### Comparison definition
 
 The relationship between $S$ and $G$ cad be defined in terms of how $G$ *describes* $S$.
-In the context of DEM modeling, this may seem backward because typically in DEM modeling, a target GSD is defined first and a sample generated to match it.
-On the other hand, a discrete sample (either physical or numerical) exists on its own, whereas a GSD only has meaning when interpreted as a description of a sample.
-Therefore the relationship between $S$ and $G$ will be defined in terms of $G$'s description of $S$.
 In a later section, the topic of finding an instance of $S$ that *matches* a target $G$ will be addressed.
 
 The relationship between $S$ and $G$ is formalized with the following conditions:
@@ -206,7 +202,7 @@ The relationship between $S$ and $G$ is formalized with the following conditions
 **Condition 1:** $G$ is complete if and only if the final entry in $M_G$ is zero: $$G \text{ is complete } \Leftrightarrow m_{n_G} = 0$$ {#eq-gsd_complete}
 
 This condition ensures that $x_{nG}$ provides an upper bound to the sizes described by $G$.
-This is analogous to the limitation of scope in ASTM D6913 to grain sizes passing a 75-mm sieve, ensuring the cumulative GSD always reaches 100 percent at a known size [@d18committee].
+This is analogous to the limitation of scope in ASTM D6913 to grain sizes passing the 75-mm sieve, ensuring the cumulative GSD always reaches 100 percent at a known size [@d18committee].
 
 **Condition 2:** $G$ describes $S$ (denoted $G \longrightarrow S$) if and only if $\text{Cond1}$ is met and the its smallest size is smaller than any size in $S$ and its largest size is larger than any size in $S$:
 
@@ -219,9 +215,6 @@ $$ {#eq-gds_describes}
 $$
 G \stackrel{\text{articulately}}{\longrightarrow} S \Leftrightarrow \text{Cond2} \land \forall (x_i, x_{i+1}) \in X_S \quad \exists\, x_j \in X_G \text{ such that } x_i < x_j \le x_{i+1}
 $$ {#eq-gsd_articulate}
-
-$\text{Cond3}$ is rarely (if ever) met in physical scenarios because it requires that only a single size be present between any two adjacent sieves.
-The final MDM solution will not be constrained by $\text{Cond3}$, but it is helpful for formulating the solution.
 
 **Condition 4:** $G$ describes $S$ accurately if $\text{Cond2}$ is met and the combined masses of all the particles with sizes between every pair of sizes in $X_G$ is equal to the retained mass on the lower of the size pairs in $G$:
 
@@ -255,20 +248,20 @@ Note, however, that the use of this particular scaling function is not required 
 It is only necessary that $f(x)$ be some mapping of $x \mapsto  m$.
 It would be possible to combine sets of differently shaped particles of different densities with respective mapping functions, but this paper will limit itself to assuming uniform, spherical particles.
 
-## Grain sizes evaluated
+## GSD study suite
 
 This paper will analyze several grain size distributions in the range of interest in geotechnical engineering (although the methods are applicable over a wider range).
-Specifically, 2750 randomized GSDs based on distributions across the sieve set specified in ASTM D6913 (14 opening sizes from 0.075-mm to 75-mm) are analyzed.
+Specifically a suite of 2750 randomized GSDs based on the sieve set specified in ASTM D6913 (14 opening sizes from 0.075 to 75 mm) are analyzed.
 The distributions were generated by adding random noise to normal mass distributions around a "central" size.
 The central size itself was randomly selected from the middle half of the sieves used.
 Between 5 and 14 consecutive sieves were used in each GSD.
 For classification purposes, articles smaller than 0.075 are assumed to be low plasticity silt, regardless of their size.
 
-@tbl-gsd_params summarizes the GSDs used in this study using several traditional characteristics including coefficient of curvature, $C_c$, and coefficient of uniformity, $C_u$.
+@tbl-gsd_params summarizes the GSD suite using several traditional characteristics including coefficient of curvature, $C_c$, and coefficient of uniformity, $C_u$.
 The grain size index, $I_{GS}$, as defined by @erguler2016 and a new parameter, the curvature index, $I_C$, are also presented.
-The curvature index is conceptually similar to the grain size index in that it is a ratio of areas related to the cumulative distribution function (in percent passing, log size space) of the GSD.
+The curvature index is conceptually similar to the grain size index in that it is a ratio of areas related to the cumulative distribution function of the GSD.
 $I_C$ normalizes the area under the GSD curve to the trapezoidal area bounded by the percent passing the smallest size above the pan ($x_{min+1}$) and the largest size ($x_{max}$).
-@fig-gsd_curvature_index shows a subset (about 20%) of the GSDs considered and illustrates the definition of $I_C$ on an example GSD.
+@fig-gsd_curvature_index shows a subset (about 20%) of the GSD suite and illustrates the definition of $I_C$ on an example GSD.
 
 ::: {#tbl-gsd_params}
 | Parameter        | Value(s) in study |
@@ -369,7 +362,7 @@ for start in range(0, len(x) - min_span):
 
 ```{python}
 #| label: fig-gsd_curvature_index
-#| fig-cap: "A representative subset (~10%) of the GSDs evaluated. The area ratio defining the curvature index is shown. The curve in the highlighted example has a curvature index of 1.09."
+#| fig-cap: "A representative subset (~10%) of the GSD suite. The area ratio defining the curvature index is shown. The curve in the highlighted example has a curvature index of 1.09."
 
     
 # grain size distribution plot
@@ -467,10 +460,11 @@ ax.set_xlim(0.055, 100)
 
 ## Minimal discrete match solution
 
-For any given sample, creating a grain size distributionthat accurately describes it is no more complicated than following the numerical equivalent to a sieve analysis.
-The reverse, however, finding a solution for $S$ that is accurately described by some target $G$, is non-trivial.
-One of the reasons is that unlike a grain size analysis, the sizes of the solution ($X_S$) are bounded, but not explicitly defined.
-Additionally, the goal for this procedure is not only to find any $S$ that is accurately described by $G$, but the minimal packing set $S_{min}$ that is accurately described by $G$.
+This section presents the use of the discrete definitions in the previous section in the formulation of the solution to the MDM problem.
+The solution takes the form of the MDM sample, $S_{MDM}$, which contains the the minimum number of particles ($N_{MDM}$) needed for a mass-based match to $G$.
+The solution is then projected to the simulation scale, allowing for an estimate of the number of particles in an simulation $N_{sim}$ of arbitrary size.
+
+### Mass-based matching
 
 As a starting point, assuming that $G$ is an articulate description of $S$ limits the number of sizes in $S$ to $n_G-1$.
 Temporarily setting aside the minimization goal, any valid sizes may be selected for $X_S$.
@@ -671,96 +665,30 @@ custom_lines = [
 ax1.legend(title="MDM Algorithm", handles=custom_lines, loc='upper right')
 ```
 
-If the fixed size approach, with its many iterations produce larger solutions for a "minimal" set than a different algorithm, can its solutions even be considered valid?
-They are, in fact, valid solutions, but to an over-constrained version of the problem at hand.
-This differently constrained solution serves at least two potential purposes.
-First, there are scenarios in which very specific, pre-determined sizes are required.
-For example, in space-filling solutions, such as presented by @botet2021, particle size is constrained by 3-D geometry rather than the 1-D bounds of a mass distribution-filling problems.
-Second, comparing the "minimal" solution sizes from the fixed size and spanned integer algorithms provides a measure of how sensitive the minimal discrete match problem is to the selection of sizes.
+In some sense, the $FS$ approach would appear invalid since it tends to find larger "minimal" solutions than the $SI$ approach, but there are scenarios in which it can be useful.
+For example, in cases where specific particle sizes (as opposed to ranges) are needed, as is the case with space-filling problems [@botet2021].
+In the context of mass-distribution fitting, the $FS$ results show how sensitive the minimal discrete matching problem is to the selection of sizes.
 The $SI$ algorithm finds the ideal sizes where the relative particle quantities fall neatly into place to match the target GSD.
 Even over the fairly small available size ranges, the $FS$ algorithm performance shows that deviation from these ideal sizes can carry a significant penalty.
-
 The results in the rest of this paper use the spanned integer algorithm.
+
+### Projection to simulation scale
+
+The volume of the MDM is not the same as the RV or any specific physical sample size.
+But converting the MDM results to a simulation scale is straightforward if the volume and target void ratio are known.
+The number of particles in a simulation-scale sample ($N_{sim}$) can be estimated using:
+
+$$
+N_{sim} = N_{MDM} \times \frac{V_{sim}}{V_{MDM} \times (1 + e)}
+$$ {#eq-sample_scale}
+
+$V_{MDM}$ is the volume of solids in the MDM, which can be calculated from the total MDM mass (@eq-gsd_accurate) and particle density.
+The result of @eq-sample_scale should be considered an estimate of the total particles of the full-scale DEM as it does not take into account boundary effects or the particle-generating algorithms used by DEM codes.
+Also note that whether the simulation volume, $V_{sim}$, meets or is intended to meet the criteria for RV is the modeler's responsibility and outside the scope of this work.
 
 ## Results
 
 ```{python}
-# Create a larger dataset for plotting trends in MPS for a broad spectrum of GSDs
-## Set up data structure to store GSDs and MPSs
-def add_data_row(data_rows, mpgen: MinimalPackingGenerator):
-    """
-    Adds a row to the DataFrame with the provided keyword arguments.
-    Any missing columns will be filled with NaN.
-
-    """
-    sample = mpgen.mps
-    total_particles = sum(sample.quantities)
-    mass_max = sample.total_masses[-1]
-    mass_mid = sample.total_masses[len(sample.total_masses) // 2]
-    mass_min = sample.total_masses[0]
-    mass_ratio = mass_min / mass_max
-    percent_fines = mass_min / sum(sample.total_masses)
-
-    size_max = sample.sizes[-1]
-    size_min = sample.sizes[0]
-    size_ratio = int(np.round(size_max / size_min, 0))
-
-    row = {
-        "GSD": mpgen.g,
-        "n_sieves": len(sample.sizes),
-        "mass_ratio": mass_ratio,
-        "size_ratio": size_ratio,
-        "vol_ratio": size_ratio**3,
-        "percent_fines": percent_fines,
-        "total_particles": total_particles,
-        "d_10": mpgen.g.d_10,
-        "d_30": mpgen.g.d_30,
-        "d_60": mpgen.g.d_60,
-        "cc": np.round(mpgen.g.cc, 3),
-        "cu": np.round(mpgen.g.cu, 3),
-        "gs_index": mpgen.g.gs_index,
-        "curvature_index": mpgen.g.curvature_index,
-        "log_size": mpgen.g._i_gs_curve()[0],
-        "gsd_curve": mpgen.g._i_gs_curve()[1],
-        "slope": mpgen.g.slope,
-        "curvature": np.mean(mpgen.g.curvature),  # + size_ratio**3,
-        # Best so far:
-        "shape_factor": np.log10(
-            size_ratio**3 * (1 + np.mean(mpgen.g.curvature))
-        ),  # * np.log10(size_ratio)**2),
-        "asdf": mass_ratio * size_ratio**3,
-        "group_symbol": mpgen.g.uscs_symbol,
-        "group_name": mpgen.g.uscs_name,
-    }
-    data_rows.append(row)
-    pass
-  
-## Populate dataset
-data_rows = []
-x = x1
-min_span = 5
-for start in range(0, len(x) - min_span):
-    for end in range(start + min_span, len(x)):
-        new_x = x[start:end]
-        n_sieves = len(new_x)
-
-        for j in range(50):
-            # Create a distributed set of retained masses
-            mass = mass_dist(n_sieves, rng, exponent=2, extra_randomness=7)
-
-            mass[-1] = 0.0  # Ensure last mass is zero
-            g = GSD(sizes=new_x, masses=mass)
-
-            # Create a flexible minimal packing for each GSD
-            mps = MinimalPackingGenerator(
-                g, x_n_factor=0.001, tol=tol, flex=True, density=1.0
-            )
-            add_data_row(data_rows, mps)
-            
-## Convert the list of dictionaries to a DataFrame
-df = pd.DataFrame(data_rows)
-
-###
 
 # Data from Zeraati and Shamsabadi (2025)
 zs_data = {
@@ -834,148 +762,20 @@ zs_data = {
 
 ```
 
-The minimal discrete matches for the grain size distributions described in @tbl-gsd_params range in magnitude from $\mathcal{O}(10^1)$ to $\mathcal{O}(10^{10})$ particles.
-The results are presented in terms of $\phi_1$, $\zeta_1$, $I_C$, and USCS classification.
-As intuition suggests, increasing the percent mass of the smallest particle sizes or the ratio of the largest to the smallest particle sizes both tend to increase $N_{MDM}$.
-@fig-phi_n illustrates a scattered linear relationship between $\phi_1$ (subscript 1 indicates the smallest particle size) and $N_{MDM}$ in log-log space for constant volume ratio, $\zeta_1$.
-For $\phi_1 \approx 0.4$, $\log_{10}\zeta_1$ correlates roughly 1:1 with $N_{MDM}$.
-The color bands of $\log_{10} \zeta_1$ indicate distinct combinations of min and max sieve sizes in the target $G$.
+This section presents the results of a comparison between the MDM methods prediction of $N_{sim}$ and an independent DEM study as well as the results for $N_{MDM}$ for the GSD suite described in @tbl-gsd_params.
 
-```{python}
-#| label: fig-phi_n
-#| fig-cap: "Total particles in MDM with mass ratio. Color scale indicates volume ratio."
+### Comparison to independent DEM data
 
-color_param = "vol_ratio"
-x_param = "mass_ratio"  # "curvature_index"
-y_param = "total_particles"
+The MDM-based simulation-scale estimate method was tested against the DEM models from a study on upscaled GSDs of Athabasca oil tailings sand by @zeraati-shamsabadi2025.
+The study upscaled the actual sand GSD (for computational efficiency) with a scale factor ($SF$) ranging from 5 to 20 and produced simulation samples with diameters ranging from 50 to 175 mm with consolidated sample heights and void ratios from 23.6 to 26.0 mm and 0.64 to 0.8, respectively.
+According to the USCS, unscaled Athabasca sand and the GSDs up to $SF$ of 15 are classified as "poorly graded sand"; the coarsest model ($SF=20$) is "poorly graded sand with gravel."
 
-fig, ax = plt.subplots()
-ax.scatter(
-    df[x_param],
-    df[y_param],
-    c=np.log10(df[color_param]),
-    s=10,
-    cmap="viridis",
-    alpha=1,
-)
-
-# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
-colorbar = plt.colorbar(ax.collections[0], ax=ax)
-colorbar.set_label(r"Log$_{10}$Volume Ratio ($\zeta_1$)")
-
-ax.set_xlabel(r"Mass Ratio ($\phi_1$)")
-ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
-ax.set_xscale("log")
-ax.set_yscale("log")
-
-```
-
-A similar pattern exists between $N_{MDM}$ , $\zeta_1$, and $I_C$ as shown in @fig-curvature_n.
-At a given volume ratio, an increase in curvature index tends to result in an increased $N_{MDM}$.
-For $I_C \approx 0.7$, $\log_{10}\zeta_1$ provides a very rough 1:1 correlation with $N_{MDM}$.
-Curves with high $I_C$ tend to involve larger relative masses at lower sizes than those with low $I_C$, which is conceptually similar to $\phi_1$, but averaged over the entire distribution.
-
-```{python}
-#| label: fig-curvature_N
-#| fig-cap: "Total particles in MDM with curvature index. Color scale indicates volume ratio."
-
-color_param = "vol_ratio"
-x_param = "curvature_index"
-y_param = "total_particles"
-
-fig, ax = plt.subplots()
-ax.scatter(
-    df[x_param],
-    df[y_param],
-    c=np.log10(df[color_param]),
-    s=10,
-    cmap="viridis",
-    alpha=1,
-)
-
-# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
-colorbar = plt.colorbar(ax.collections[0], ax=ax)
-colorbar.set_label(r"Log$_{10}$Volume Ratio ($\zeta_1$)")
-
-ax.set_xlabel("Curvature Index")
-ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
-# ax.set_xscale("log")
-ax.set_yscale("log")
-
-```
-
-The grain size parameters $C_c$, $C_u$, and $I_{GS}$ were found to not correlate well with $N_{MDM}$.
-However, $I_{GS}$ is helpful for visualizing the breadth of correlation between $N_{MDM}$ and USCS classifications.
-@fig-uscs_n shows the range of $N_{MDM}$ associated with the granular USCS classifications in this study.
-The lower boundary of the data results indicate that all but the broadest distributions have instances that can be matched with $N_{MDM}$ magnitudes of $\mathcal{O}(10^2)$ or lower.
-Yet even the classifications with the smallest observed matches also have numerous instances requiring magnitudes from $\mathcal{O}(10^6)$ to $\mathcal{O}(10^9)$.
-
-```{python}
-#| label: fig-uscs_N
-#| fig-cap: "Total particles in MDM with USCS classification."
-
-fig, ax = plt.subplots(figsize=(5,7), layout="constrained")
-
-x_param = "gs_index"
-y_param = "total_particles"
-group_param = "group_name"
-# df_plot = df[df[group_param].str.contains("")]
-
-categories = ["graded gravel", "graded sand", "silty"]
-markers = ["1", ".", "."]
-
-for j, cat in enumerate(categories):
-    df_plot = df[df[group_param].str.contains(cat)]
-
-    
-    if cat == "silty":
-        palette = ["#77B3C9", "#F2A900"]
-    else:
-        palette = sns.color_palette()  # "Set2", len(df_plot[group_param].unique()))
-
-    for i, (label, group) in enumerate(df_plot.groupby(group_param)):
-        # if "graded gravel" in label:
-        #     marker = "|"
-        # else:
-        #     marker = "_"
-        symbol = group["group_symbol"].iloc[0]
-        ax.scatter(
-            group[x_param],
-            group[y_param],
-            label=f"{symbol} - {label.capitalize()}",
-            marker=markers[j],
-            color=palette[i],
-            # alpha=0.75,
-            s=40,  # Scale point size by log_total_particles
-        )
-
-
-fig.legend(
-    loc="outside upper center",
-    fontsize="small",
-    ncols=1,
-    frameon=False,
-    handlelength=2,
-)
-
-ax.set_xlabel("Grain Size Index")
-ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
-ax.set_ylim(1e0,2e10)
-ax.set_xlim(0.0, 0.6)
-# ax.set_xlim(1e-2, 1e2)
-# ax.set_xscale("log")
-ax.set_yscale("log")
-ax.grid(True, which='both', axis='both')
-
-```
-
-Relative to "poorly graded gravel", "well-graded gravel" tends to have larger $N_{MDM}$.
-Where "with sand" is applicable to the gravel group name, this tendancy and lower limit of $N_{MDM}$ remains the same, but the upper range of $N_{MDM}$ is higher.
-Instances where "with silt and sand" are applicable to the gravel group name were rare in the generated GSDs and had very high values of $N_{MDM}$.
-The rarity and large $N_{MDM}$ for these gradations are due to strict requirements for these group names, which only a small range of values across a broad range of particle sizes can satisfy.
-
-Relative to "poorly graded sand", "well-graded sand" tends to have a similar (and quite broad) range of $N_{MDM}$.
-The addition of "with gravel" or "with silt" makes very little difference in the range of $N_{MDM}$ at similar ranges of $I_{GS}$ (although a small increase in lower bound is apparent in "well-graded sand with gravel". Even "silty sand" appears to share orders of magnitude with "poorly graded sand" at comparable ranges of $I_{GS}$. Similar to the trends for gravels, sands whose group names include both silt and gravel were rare in the generated GSDs and had high values of $N_{MDM}$.
+@fig-demo shows a strong agreement between of the total number of simulation particles predicted by the MDM method and those reported in the @zeraati-shamsabadi2025 study.
+Relative to the predicted values, the study reported a moderately larger number of particles for all the samples.
+This suggests the DEM models used different discrete representation of the scaled GSDs than the MDM, which is expected.
+Even so, the consistent trend confirms the MDM captures the relative computational efforts and provides a good estimate of the actual $N_{sim}$ independent of the specific discrete GSD match.
+Figure also shows the MDM methods ability to predict the particles needed for extremely high resolution DEM models without generating them.
+Relative to the highest resolution models in the study ($SF=5$), the MDM method indicates simulations of unscaled Athabasca sand would require roughly $10^2$ times the number of pa
 
 ```{python}
 df = pd.DataFrame(zs_data)
@@ -1214,27 +1014,256 @@ ax.set_yscale("log")
 ax.set_xlim([1e3, 5e8])
 ax.set_ylim([1e3, 5e8])
 ax.set_aspect("equal")  # Ensure equal scaling of axes
-ax.set_xlabel("N (MDM predicted)")
-ax.set_ylabel("N (reported)")
+ax.set_xlabel(r"$N_{sim}$ (MDM predicted)")
+ax.set_ylabel(r"$N_{sim}$ (reported)")
 ax.grid(False)
 
 ```
 
+### MDMs in the GSD suite
+
+The minimal discrete matches for the GSD suite described in @tbl-gsd_params range in magnitude from $\mathcal{O}(10^1)$ to $\mathcal{O}(10^{10})$ particles.
+As intuition suggests, increasing the percent mass of the smallest particle sizes or the ratio of the largest to the smallest particle sizes both tend to increase $N_{MDM}$.
+@fig-phi_n illustrates a scattered linear relationship between $\phi_1$ (subscript 1 indicates the smallest particle size) and $N_{MDM}$ in log-log space for constant volume ratio, $\zeta_1$.
+For $\phi_1 \approx 0.4$, $\log_{10}\zeta_1$ correlates roughly 1:1 with $N_{MDM}$.
+The color bands of $\log_{10} \zeta_1$ indicate distinct combinations of min and max sieve sizes in the target $G$.
+
+```{python}
+# Create a larger dataset for plotting trends in MPS for a broad spectrum of GSDs
+## Set up data structure to store GSDs and MPSs
+def add_data_row(data_rows, mpgen: MinimalPackingGenerator):
+    """
+    Adds a row to the DataFrame with the provided keyword arguments.
+    Any missing columns will be filled with NaN.
+
+    """
+    sample = mpgen.mps
+    total_particles = sum(sample.quantities)
+    mass_max = sample.total_masses[-1]
+    mass_mid = sample.total_masses[len(sample.total_masses) // 2]
+    mass_min = sample.total_masses[0]
+    mass_ratio = mass_min / mass_max
+    percent_fines = mass_min / sum(sample.total_masses)
+
+    size_max = sample.sizes[-1]
+    size_min = sample.sizes[0]
+    size_ratio = int(np.round(size_max / size_min, 0))
+
+    row = {
+        "GSD": mpgen.g,
+        "n_sieves": len(sample.sizes),
+        "mass_ratio": mass_ratio,
+        "size_ratio": size_ratio,
+        "vol_ratio": size_ratio**3,
+        "percent_fines": percent_fines,
+        "total_particles": total_particles,
+        "d_10": mpgen.g.d_10,
+        "d_30": mpgen.g.d_30,
+        "d_60": mpgen.g.d_60,
+        "cc": np.round(mpgen.g.cc, 3),
+        "cu": np.round(mpgen.g.cu, 3),
+        "gs_index": mpgen.g.gs_index,
+        "curvature_index": mpgen.g.curvature_index,
+        "log_size": mpgen.g._i_gs_curve()[0],
+        "gsd_curve": mpgen.g._i_gs_curve()[1],
+        "slope": mpgen.g.slope,
+        "curvature": np.mean(mpgen.g.curvature),  # + size_ratio**3,
+        # Best so far:
+        "shape_factor": np.log10(
+            size_ratio**3 * (1 + np.mean(mpgen.g.curvature))
+        ),  # * np.log10(size_ratio)**2),
+        "asdf": mass_ratio * size_ratio**3,
+        "group_symbol": mpgen.g.uscs_symbol,
+        "group_name": mpgen.g.uscs_name,
+    }
+    data_rows.append(row)
+    pass
+  
+## Populate dataset
+data_rows = []
+x = x1
+min_span = 5
+for start in range(0, len(x) - min_span):
+    for end in range(start + min_span, len(x)):
+        new_x = x[start:end]
+        n_sieves = len(new_x)
+
+        for j in range(50):
+            # Create a distributed set of retained masses
+            mass = mass_dist(n_sieves, rng, exponent=2, extra_randomness=7)
+
+            mass[-1] = 0.0  # Ensure last mass is zero
+            g = GSD(sizes=new_x, masses=mass)
+
+            # Create a flexible minimal packing for each GSD
+            mps = MinimalPackingGenerator(
+                g, x_n_factor=0.001, tol=tol, flex=True, density=1.0
+            )
+            add_data_row(data_rows, mps)
+            
+## Convert the list of dictionaries to a DataFrame
+df = pd.DataFrame(data_rows)
+
+###
+```
+
+```{python}
+#| label: fig-phi_n
+#| fig-cap: "Total particles in MDM with mass ratio. Color scale indicates volume ratio."
+
+color_param = "vol_ratio"
+x_param = "mass_ratio"  # "curvature_index"
+y_param = "total_particles"
+
+fig, ax = plt.subplots()
+ax.scatter(
+    df[x_param],
+    df[y_param],
+    c=np.log10(df[color_param]),
+    s=10,
+    cmap="viridis",
+    alpha=1,
+)
+
+# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
+colorbar = plt.colorbar(ax.collections[0], ax=ax)
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($\zeta_1$)")
+
+ax.set_xlabel(r"Mass Ratio ($\phi_1$)")
+ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
+ax.set_xscale("log")
+ax.set_yscale("log")
+
+```
+
+A similar pattern exists between $N_{MDM}$ , $\zeta_1$, and $I_C$ as shown in @fig-curvature_n.
+At a given volume ratio, an increase in curvature index tends to result in an increased $N_{MDM}$.
+For $I_C \approx 0.7$, $\log_{10}\zeta_1$ provides a very rough 1:1 correlation with $N_{MDM}$.
+Curves with high $I_C$ tend to involve larger relative masses at lower sizes than those with low $I_C$.
+
+```{python}
+#| label: fig-curvature_N
+#| fig-cap: "Total particles in MDM with curvature index. Color scale indicates volume ratio."
+
+color_param = "vol_ratio"
+x_param = "curvature_index"
+y_param = "total_particles"
+
+fig, ax = plt.subplots()
+ax.scatter(
+    df[x_param],
+    df[y_param],
+    c=np.log10(df[color_param]),
+    s=10,
+    cmap="viridis",
+    alpha=1,
+)
+
+# ax.legend(title="cu", loc='upper left', bbox_to_anchor=(1, 1))
+colorbar = plt.colorbar(ax.collections[0], ax=ax)
+colorbar.set_label(r"Log$_{10}$Volume Ratio ($\zeta_1$)")
+
+ax.set_xlabel("Curvature Index")
+ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
+# ax.set_xscale("log")
+ax.set_yscale("log")
+
+```
+
+The grain size parameters $C_c$, $C_u$, and $I_{GS}$ were found to not correlate well with $N_{MDM}$.
+However, $I_{GS}$ is helpful for visualizing the breadth of correlation between $N_{MDM}$ and USCS classifications.
+@fig-uscs_n shows the range of $N_{MDM}$ associated with the granular USCS classifications in this study.
+The lower boundary of the data results indicate that all but the broadest distributions have instances that can be matched with $N_{MDM}$ magnitudes of $\mathcal{O}(10^2)$ or lower.
+Yet even the classifications with the smallest observed matches also have numerous instances requiring magnitudes from $\mathcal{O}(10^6)$ to $\mathcal{O}(10^9)$.
+
+```{python}
+#| label: fig-uscs_N
+#| fig-cap: "Total particles in MDM with USCS classification."
+
+fig, ax = plt.subplots(figsize=(5,7), layout="constrained")
+
+x_param = "gs_index"
+y_param = "total_particles"
+group_param = "group_name"
+# df_plot = df[df[group_param].str.contains("")]
+
+categories = ["graded gravel", "graded sand", "silty"]
+markers = ["1", ".", "."]
+
+for j, cat in enumerate(categories):
+    df_plot = df[df[group_param].str.contains(cat)]
+
+    
+    if cat == "silty":
+        palette = ["#77B3C9", "#F2A900"]
+    else:
+        palette = sns.color_palette()  # "Set2", len(df_plot[group_param].unique()))
+
+    for i, (label, group) in enumerate(df_plot.groupby(group_param)):
+        # if "graded gravel" in label:
+        #     marker = "|"
+        # else:
+        #     marker = "_"
+        symbol = group["group_symbol"].iloc[0]
+        ax.scatter(
+            group[x_param],
+            group[y_param],
+            label=f"{symbol} - {label.capitalize()}",
+            marker=markers[j],
+            color=palette[i],
+            # alpha=0.75,
+            s=40,  # Scale point size by log_total_particles
+        )
+
+
+fig.legend(
+    loc="outside upper center",
+    fontsize="small",
+    ncols=1,
+    frameon=False,
+    handlelength=2,
+)
+
+ax.set_xlabel("Grain Size Index")
+ax.set_ylabel("Particles in Discrete Match ($N_{MDM}$)")
+ax.set_ylim(1e0,2e10)
+ax.set_xlim(0.0, 0.6)
+# ax.set_xlim(1e-2, 1e2)
+# ax.set_xscale("log")
+ax.set_yscale("log")
+ax.grid(True, which='both', axis='both')
+
+```
+
+Relative to "poorly graded gravel", "well-graded gravel" tends to have larger $N_{MDM}$.
+Where "with sand" is applicable to the gravel group name, this tendancy and lower limit of $N_{MDM}$ remains the same, but the upper range of $N_{MDM}$ is higher.
+Instances where "with silt and sand" are applicable to the gravel group name were rare in the generated GSDs and had very high values of $N_{MDM}$.
+The rarity and large $N_{MDM}$ for these gradations are due to strict requirements for these group names, which only a small range of values across a broad range of particle sizes can satisfy.
+
+Relative to "poorly graded sand", "well-graded sand" tends to have a similar (and quite broad) range of $N_{MDM}$.
+The addition of "with gravel" or "with silt" makes very little difference in the range of $N_{MDM}$ at similar ranges of $I_{GS}$ (although a small increase in lower bound is apparent in "well-graded sand with gravel". Even "silty sand" appears to share orders of magnitude with "poorly graded sand" at comparable ranges of $I_{GS}$. Similar to the trends for gravels, sands whose group names include both silt and gravel were rare in the generated GSDs and had high values of $N_{MDM}$.
+
 ## Discussion
 
-The spanned integer algorithm component of the approach presented here is effective in finding the MDM.
-However, some caution is warranted in using the full flexibility allowed by a GSD on the discrete particle sizes.
-While traditional sieve analyses, and the analogous mathematical representation presented herein do not provide any additional constraints, natural soil grain distributions are known to be broadly distributed between sieves [@ghalib1999].
-Modelers should inspect the MDM sizes of their target GSDs for results that would indicate abnormal underlying characteristics (e.g., repeated adjacent discrete sizes converging at the sieve boundary).
-Approximate solutions to the MDM, which give greater control over particle sizes, may be sufficient depending on the application and the desired rigor in the $S:G$ match.
+The $SI$ algorithm component of the approach presented here is significantly more effective than the $FS$ algorithm in finding the MDM.
+However, whether this difference is critical in most geomechanics applications is unclear.
+Intuitively, MDM solutions for distributions with smallest quantities of particles will have the most sensitivity to errors and seem to benefit from the $SI$ algorithm.
+On the other hand, these distributions are likely to have the smallest volumes relative to their representative volumes and will therefore have $N_{sim} \gg N_{MDM}$, which will tend to reduce the errors associated with the $FS$ algorithm substantially.
+Additionally, as it allows greater control over particle sizes, an approximate solution from the $FS$ algorithm may even be preferable depending on the application and the desired rigor in the $S:G$ match.
 
-It is important to understand that an MDM does not constitute a representative volume (RV).
-An MDM is defined purely in terms of discrete mass-volume relationships.
-The RV has additional requirements about the mechanical behavior.
-Nevertheless, the mechanical behavior of granular materials is strongly influenced by its GSD, so the discrete mass-volume relationship cannot be fully decoupled from the RV.
-In this sense, the MDM can be thought of as a building block and minimum bound on the particle count in RV, which can be useful in assessing computational cost.
+Both of the MDM approaches assume a single particle size between each adjacent sieve pair, but natural soil grain distributions are known to be broadly distributed between sieves [@ghalib1999].
+This aspect of MDM solution stems from the use of $\text{Cond3}$, which is important in *finding* the solution, but can be abandoned after the solution is found in most cases.
+Except where the solution contains only a single particle at a given size, the possibility exists for replacing the single size and associated quantity with an equal number of particles with varying (but allowable) sizes.
+The greater the number of particles at a given size, the more potential there is to represent them with a distribution of sizes.
 
-The behavior being modeled may allow some portions of realistic GSDs to be truncated without loss of fidelity, allowing a partial decoupling of MDM and RV.
+The comparison between predicted and reported $N_{sim}$ values in @fig-demo show the value of the MDM concept for experimental design.
+As mentioned previously, differences between the reported and predicted values suggest the DEM models used a different discrete representation of the scaled GSDs than the MDM.
+The fact that the reported values are consistently, though modestly, higher than the MDM predictions is expected since the MDM is defined to be a lower bound of possible values.
+It is worth noting that the MDM concept is silent as to whether any valid discrete representation of a GSD is "better" than another, only which has fewest particles.
+From a mechanics perspective, non-minimal GSD representations may have advantages that supersede increases in $N_{sim}$; an idea worth further study.
+
+The MDM concept makes much of providing an accurate representation of grain size distribution because mechanical behavior cannot be fully decoupled from GSD.
+However, when it is used in experimental design and to explore feasibility, it should be paired with the understanding that partial decoupling of mechanical behavior from GSD is sometimes possible.
 For example, studies have shown that for certain combinations of GSD and density, there may be significant portions of the soil mass that are not mechanically engaged with the soil matrix [@sufian2021].
 This may lead to thresholds of particle size that can be omitted from a given simulation without significant impact on the behavior being studied.
 In such cases, the MDM concept is still valuable for comparing relative computational effort with varying levels of truncation.
@@ -1242,16 +1271,17 @@ In such cases, the MDM concept is still valuable for comparing relative computat
 ## Conclusions
 
 This paper described algorithms to 1) find a first-order approximation of a minimal discrete match (MDM) to general grain size distributions, 2) quantify the error in approximate minimal matches, and 3) find a rigorous solution for the MDM with a spanned integer approach.
-Depending on whether the modeling application calls for a rigorous match between a target GSD and its DEM representation, either a rigorous or approximate MEM approach may be appropriate.
+The following conclusions are presented as the key out comes of the study on the MDM algorithms, comparison of predictions with independent DEM data, and a study on an array of GSDS:
 
-The MDM is a valuable tool in quantifying relative computational cost and assessing feasibility of building DEM models of different grain size distributions.
-To be used effectively, the representative volume for the modeling application must be considered.
+1.  The MDM is a valuable tool in quantifying relative number of particles needed to create DEM models of different grain size distributions.
+    This can provide important insight into computational cost and feasibility during experimental design.
+    To be used effectively, it must be accompanied by an understanding of the representative volume concept.
 
-The MDM results for a large distribution of USCS show several trends: increasing the ratio of maximum to minimum particle size, the relative mass of the smallest particles, and the curvature index all increase the size of the MDM.
+2.  The MDM results for a large distribution of USCS show several trends: increasing the ratio of maximum to minimum particle size, the relative mass of the smallest particles, and the curvature index all increase the size of the MDM.
 
-The distribution of MDM size across USCS classifications indicates that a wide range of realistic granular soils are feasible for DEM modeling.
-The distribution also indicates that neither USCS classification, curvature index, size, and mass ratios alone are sufficient to characterize MDM size.
-This indicates that MDM magnitudes for specific GSDs of interest should calculated rather than estimated based on index parameters.
+3.  The distribution of MDM size across USCS classifications indicates that a wide range of realistic granular soils are feasible for DEM modeling.
+    The distribution also indicates that neither USCS classification, curvature index, size, and mass ratios alone are sufficient to characterize MDM size.
+    This indicates that MDM magnitudes for specific GSDs of interest should calculated rather than estimated based on index parameters.
 
 ## Data and code availability
 
